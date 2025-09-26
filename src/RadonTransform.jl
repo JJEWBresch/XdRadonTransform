@@ -1,3 +1,4 @@
+using Base.Threads   # makes @threads available
 # setprecision(Double64, 64)
 
 struct RadonTransform
@@ -39,9 +40,11 @@ end
 function (R::RadonTransform)(image::AbstractMatrix)
     P = Phantom(image)
     S = zeros(Float64, R.radii, R.angles)
-    for j in axes(S, 1), k in axes(S, 2)
-        r = determine_corresponding_ray(j, k, R)
-        S[j, k] = integrate_along_ray(P, r)
+    @threads for j in axes(S, 1)
+        for k in axes(S, 2)
+            r = determine_corresponding_ray(j, k, R)
+            S[j, k] = integrate_along_ray(P, r)
+        end
     end
     return S
 end

@@ -1,3 +1,5 @@
+using Base.Threads   # makes @threads available
+
 struct RadonTransform3d
     radii::Int64
     angles_theta::Int64
@@ -52,16 +54,18 @@ function (R::RadonTransform3d)(image::AbstractArray)
     P = Phantom3d(image)
     S = zeros(R.radii, R.angles_theta, R.angles_phi)
     PI = DomRadon(P)
-    for k in axes(S, 2), l in axes(S, 3)
-        p_θ = determine_corresponding_angle(k, l, R)
-        theta = Theta(p_θ)
-        TI = map(a -> sum(a), map(a -> a .* theta, PI))
-        for j in axes(S,1)
-            t = determine_corresponding_ray(j, R)
-            t_down, t_up = t.t - 3*sqrt(3)*P.pixel_size, t.t + 3*sqrt(3)*P.pixel_size
-            T = findall(x -> t_down <= x <= t_up, TI)
-            if size(T)[1] > 0
-                S[j, k, l] = integrate_along_plan(T, TI, P, p_θ, t.t)
+    @threads for k in axes(S, 2)
+        for l in axes(S, 3)
+            p_θ = determine_corresponding_angle(k, l, R)
+            theta = Theta(p_θ)
+            TI = map(a -> sum(a), map(a -> a .* theta, PI))
+            for j in axes(S,1)
+                t = determine_corresponding_ray(j, R)
+                t_down, t_up = t.t - 3*sqrt(3)*P.pixel_size, t.t + 3*sqrt(3)*P.pixel_size
+                T = findall(x -> t_down <= x <= t_up, TI)
+                if size(T)[1] > 0
+                    S[j, k, l] = integrate_along_plan(T, TI, P, p_θ, t.t)
+                end
             end
         end
     end
