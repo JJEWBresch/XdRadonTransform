@@ -25,7 +25,7 @@ end
 function RestrictedRadonTransform(radii::Vector{Float64}, angle::Vector{Float64})
     num_radii = length(radii)
     dim = length(angle)
-    return restrictedRadonTransform(radii, num_radii, angle, dim)
+    return RestrictedRadonTransform(radii, num_radii, angle, dim)
 end
 
 
@@ -54,7 +54,7 @@ struct Hypervoxel
 end
 
 function Hypervoxel(P::Phantom, j::CartesianIndex)
-    c = (Float64.(j.I) - (Float64.(size(P.data)) .+ 1) ./ 2) .* P.hypervoxel_size
+    c = (Float64.(j.I) .- (Float64.(size(P.data)) .+ 1) ./ 2) .* P.hypervoxel_size
     return Hypervoxel(c, P.data[j], P.hypervoxel_size)
 end
 
@@ -79,7 +79,7 @@ function RadonKernel(Rθ::RestrictedRadonTransform, hypervoxel_size::Vector{Floa
 end
 
 function reduce(v::Vector{Float64})
-    return v[v != 0.0]
+    return v[abs.(v) .>= 1e-6]
 end
 
 function (A::RadonKernel)(t::Float64)
@@ -117,7 +117,7 @@ function (R::RadonTransform)(P::Phantom)
 end
 
 function (Rθ::RestrictedRadonTransform)(P::Phantom)
-    S = zeros(Float64, R.num_radii)
+    S = zeros(Float64, Rθ.num_radii)
     A = RadonKernel(Rθ, P.hypervoxel_size)
     for j in CartesianIndices(P.data)
         if P.data[j] ≠ 0.0
