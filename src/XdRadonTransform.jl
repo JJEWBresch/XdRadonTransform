@@ -6,8 +6,10 @@ using Statistics
 export TestImages
 export DataTransformations
 
-export RadonTransform, Backprojection, FilterBackprojection
+export RadonTransform
 export RadonTransform3d
+
+export Phantom, Sinogram
 
 include("TestImages.jl")
 include("DataTransformations.jl")
