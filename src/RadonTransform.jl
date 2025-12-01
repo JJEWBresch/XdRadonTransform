@@ -79,7 +79,7 @@ function RadonKernel(Rθ::RestrictedRadonTransform, hypervoxel_size::Vector{Floa
 end
 
 function reduce(v::Vector{Float64})
-    return v[abs.(v) .>= 1e-6]
+    return v[abs.(v) .> 1e-10]
 end
 
 function (A::RadonKernel)(t::Float64)
