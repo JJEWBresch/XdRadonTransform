@@ -79,7 +79,8 @@ function RadonKernel(Rθ::RestrictedRadonTransform, hypervoxel_size::Vector{Floa
 end
 
 function reduce(v::Vector{Float64})
-    return v[abs.(v) .> 1e-10]
+    return v[abs.(v) .> 1e-15]
+    # TODO: constant as parameter
 end
 
 function (A::RadonKernel)(t::Float64)
@@ -95,7 +96,13 @@ function (A::RadonKernel)(t::Float64)
 end
 
 function χ(t::Float64)
-    return t >= 0.0 ? 1.0 : 0.0
+    if t < 0.0
+        return 0.0
+    elseif t > 0.0
+        return 1.0
+    else
+        return 0.5
+    end
 end
 
 function hypercube_vertex(dim::Int64, index::Int64)
