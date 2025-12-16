@@ -7,12 +7,13 @@ struct RadonTransform
     angles::Matrix{Float64}
     num_angles::Int64
     dim::Int64
+    width::Float64
 end
 
-function RadonTransform(radii::Vector{Float64}, angles::Matrix{Float64})
+function RadonTransform(radii::Vector{Float64}, angles::Matrix{Float64}; width::Float64=0.0)
     num_radii = length(radii)
     (num_angles, dim) = size(angles)
-    return RadonTransform(radii, num_radii, angles, num_angles, dim)
+    return RadonTransform(radii, num_radii, angles, num_angles, dim, width)
 end
 
 struct RestrictedRadonTransform
@@ -20,12 +21,13 @@ struct RestrictedRadonTransform
     num_radii::Int64
     angle::Vector{Float64}
     dim::Int64
+    width::Float64
 end
 
-function RestrictedRadonTransform(radii::Vector{Float64}, angle::Vector{Float64})
+function RestrictedRadonTransform(radii::Vector{Float64}, angle::Vector{Float64}; width::Float64=0.0)
     num_radii = length(radii)
     dim = length(angle)
-    return RestrictedRadonTransform(radii, num_radii, angle, dim)
+    return RestrictedRadonTransform(radii, num_radii, angle, dim, width)
 end
 
 
@@ -63,27 +65,27 @@ struct ProjectedHypervoxel
     radii_indices::UnitRange{Int64}
 end
 
-struct RadonKernel
-    scaled_reduced_angle::Vector{Float64}
-    reduced_dim::Int64
-    prefactor::Float64
-end
-
-function RadonKernel(Rθ::RestrictedRadonTransform, hypervoxel_size::Vector{Float64})
-    a = hypervoxel_size ./ 2.0
-    aθ = reduce(a .* Rθ.angle)
-    ℓ = length(aθ)
-    d = Rθ.dim
-    prefactor = 2^(d - ℓ) * prod(a) / prod(aθ) / factorial(ℓ - 1)
-    return RadonKernel(aθ, ℓ, prefactor)
-end
-
 function reduce(v::Vector{Float64})
     return v[abs.(v) .> 1e-15]
     # TODO: constant as parameter
 end
 
-function (A::RadonKernel)(t::Float64)
+struct PlaneRadonKernel
+    scaled_reduced_angle::Vector{Float64}
+    reduced_dim::Int64
+    prefactor::Float64
+end
+
+function PlaneRadonKernel(Rθ::RestrictedRadonTransform, hypervoxel_size::Vector{Float64})
+    a = hypervoxel_size ./ 2.0
+    aθ = reduce(a .* Rθ.angle)
+    ℓ = length(aθ)
+    d = Rθ.dim
+    prefactor = 2^(d - ℓ) * prod(a) / prod(aθ) / factorial(ℓ - 1)
+    return PlaneRadonKernel(aθ, ℓ, prefactor)
+end
+
+function (A::PlaneRadonKernel)(t::Float64)
     ℓ = A.reduced_dim
     aθ = A.scaled_reduced_angle
     Aa = 0.0
@@ -93,6 +95,45 @@ function (A::RadonKernel)(t::Float64)
         Aa += prod(k) * χ(τ) * τ^(ℓ - 1)
     end
     return A.prefactor * Aa
+end
+
+struct SlabRadonKernel
+    scaled_reduced_angle::Vector{Float64}
+    reduced_dim::Int64
+    prefactor::Float64
+    width::Float64
+end
+
+function SlabRadonKernel(Rθ::RestrictedRadonTransform, hypervoxel_size::Vector{Float64})
+    a = hypervoxel_size ./ 2.0
+    aθ = reduce(a .* Rθ.angle)
+    ℓ = length(aθ)
+    d = Rθ.dim
+    prefactor = 2^(d - ℓ) * prod(a) / prod(aθ) / factorial(ℓ) / Rθ.width
+    return SlabRadonKernel(aθ, ℓ, prefactor, Rθ.width)
+end
+
+function (A::SlabRadonKernel)(t::Float64)
+    ℓ = A.reduced_dim
+    aθ = A.scaled_reduced_angle
+    w = A.width / 2.0
+    Aa = 0.0
+    for n in 0:2^ℓ - 1 
+        k = hypercube_vertex(ℓ, n)
+        τ = t + w + (k ⋅ aθ)
+        Aa += prod(k) * χ(τ) * τ^ℓ
+        τ = t - w + (k ⋅ aθ)
+        Aa -= prod(k) * χ(τ) * τ^ℓ
+    end
+    return A.prefactor * Aa
+end
+
+function select_Radon_kernel(Rθ::RestrictedRadonTransform, hypervoxel_size::Vector{Float64})
+    if Rθ.width == 0.0
+        return PlaneRadonKernel(Rθ, hypervoxel_size)
+    else
+        return SlabRadonKernel(Rθ, hypervoxel_size)
+    end
 end
 
 function χ(t::Float64)
@@ -117,7 +158,7 @@ end
 function (R::RadonTransform)(P::Phantom)
     S = zeros(Float64,  R.num_radii, R.num_angles)
     @threads for ℓ in 1:R.num_angles
-        Rθ = RestrictedRadonTransform(R.radii, R.angles[ℓ, :])
+        Rθ = RestrictedRadonTransform(R.radii, R.angles[ℓ, :], width=R.width)
         S[:, ℓ] = Rθ(P)
     end
     return Sinogram(S, R.radii, R.angles)
@@ -125,7 +166,7 @@ end
 
 function (Rθ::RestrictedRadonTransform)(P::Phantom)
     S = zeros(Float64, Rθ.num_radii)
-    A = RadonKernel(Rθ, P.hypervoxel_size)
+    A = select_Radon_kernel(Rθ, P.hypervoxel_size)
     for j in CartesianIndices(P.data)
         if P.data[j] ≠ 0.0
             v = Hypervoxel(P, j) 
@@ -140,7 +181,7 @@ end
 
 function project(Rθ::RestrictedRadonTransform, voxel::Hypervoxel)
     center = voxel.center ⋅ Rθ.angle
-    diameter = norm(voxel.size) / 2.0
+    diameter = (norm(voxel.size) + Rθ.width) / 2.0
     min_index = search_min_radius(Rθ.radii, center - diameter)
     max_index = search_max_radius(Rθ.radii, center + diameter)
     return ProjectedHypervoxel(center, min_index:max_index)
