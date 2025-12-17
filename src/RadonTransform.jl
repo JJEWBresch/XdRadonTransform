@@ -38,11 +38,14 @@ struct Phantom
     hypervoxel_size::Vector{Float64}
 end
 
-#function Phantom(image::AbstractMatrix)
-#    pixel_size = sqrt(2) / max(size(image)...)
-#    return Phantom(Float64.(image), Float64(pixel_size), size(image, 2), size(image, 1))  # Phantom(Double64.(image), pixel_size, size(image, 2), size(image, 1))    
-#end
+function Phantom(image::AbstractArray)
+    return Phantom(Float64.(image), ones(ndims(image)))
+end
 
+function scale(P::Phantom)
+    s = norm(P.hypervoxel_size .* size(P.data))
+    return Phantom(P.data, 2.0 ./ s .* P.hypervoxel_size)
+end
 
 struct Sinogram
     data::Matrix{Float64}
