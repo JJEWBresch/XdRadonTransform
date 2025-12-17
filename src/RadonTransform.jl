@@ -219,7 +219,7 @@ function uniform_circle(quantity::Int64)
     return θ
 end
 
-function fibonacci_sphere(quantity::Int64)
+function fibonacci_spherical_directions(quantity::Int64)
     φ = π * (3 - sqrt(5))
 	θ = zeros(quantity, 3)
     for k in 1:quantity
@@ -234,6 +234,18 @@ function random_spherical_directions(dimension::Int64, quantity::Int64)
     θ = zeros(quantity, dimension)
     for k in 1:quantity
         v = randn(dimension)
+        θ[k, :] = v ./ norm(v)
+    end
+    return θ
+end
+
+function sobol_spherical_directions(dimension::Int64, quantity::Int64)
+    θ = zeros(quantity, dimension)
+    s = SobolSeq(dimension)
+    next!(s)
+    for k in 1:quantity
+        u = next!(s)
+        v = norminvcdf.(u)
         θ[k, :] = v ./ norm(v)
     end
     return θ

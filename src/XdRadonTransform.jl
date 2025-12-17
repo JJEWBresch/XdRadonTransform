@@ -1,7 +1,9 @@
 module XdRadonTransform
 
 using Interpolations: LinearInterpolation
+using Sobol
 using Statistics
+using StatsFuns
 
 export TestImages
 export DataTransformations
@@ -13,7 +15,7 @@ export Phantom, Sinogram
 
 export scale
 
-export uniform_radii, uniform_circle, fibonacci_sphere, random_spherical_directions
+export uniform_radii, uniform_circle, fibonacci_spherical_directions, random_spherical_directions, sobol_spherical_directions
 
 include("TestImages.jl")
 include("DataTransformations.jl")
