@@ -206,6 +206,15 @@ function search_max_radius(radii::Vector{Float64}, value::Float64)
     end    
 end
 
-function uniform_radii(quantity::Inf64, max_radius::Float64=1.0)
+function uniform_radii(quantity::Int64, max_radius::Float64=1.0)
     return collect(LinRange(-max_radius, max_radius, quantity))
+end
+
+function uniform_circle(quantity::Int64)
+    θ = zeros(quantity, 2)
+    for k in 1:quantity
+        θ[k, 1] = cos(2pi * (k - 1) / quantity)
+        θ[k, 2] = sin(2pi * (k - 1) / quantity)
+    end
+    return θ
 end
