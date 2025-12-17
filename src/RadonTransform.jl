@@ -8,12 +8,13 @@ struct RadonTransform
     num_angles::Int64
     dim::Int64
     width::Float64
+    reduction_threshold::Float64
 end
 
-function RadonTransform(radii::Vector{Float64}, angles::Matrix{Float64}; width::Float64=0.0)
+function RadonTransform(radii::Vector{Float64}, angles::Matrix{Float64}; width::Float64=0.0, reduction_threshold::Float64=1e-15)
     num_radii = length(radii)
     (num_angles, dim) = size(angles)
-    return RadonTransform(radii, num_radii, angles, num_angles, dim, width)
+    return RadonTransform(radii, num_radii, angles, num_angles, dim, width, reduction_threshold)
 end
 
 struct RestrictedRadonTransform
@@ -22,12 +23,13 @@ struct RestrictedRadonTransform
     angle::Vector{Float64}
     dim::Int64
     width::Float64
+    reduction_threshold::Float64
 end
 
-function RestrictedRadonTransform(radii::Vector{Float64}, angle::Vector{Float64}; width::Float64=0.0)
+function RestrictedRadonTransform(radii::Vector{Float64}, angle::Vector{Float64}; width::Float64=0.0, reduction_threshold::Float64=1e-15)
     num_radii = length(radii)
     dim = length(angle)
-    return RestrictedRadonTransform(radii, num_radii, angle, dim, width)
+    return RestrictedRadonTransform(radii, num_radii, angle, dim, width, reduction_threshold)
 end
 
 
@@ -65,9 +67,8 @@ struct ProjectedHypervoxel
     radii_indices::UnitRange{Int64}
 end
 
-function reduce(v::Vector{Float64})
-    return v[abs.(v) .> 1e-15]
-    # TODO: constant as parameter
+function reduce(v::Vector{Float64}; ϵ::Float64=1e-15)
+    return v[abs.(v) .> ϵ]
 end
 
 struct PlaneRadonKernel
@@ -78,7 +79,7 @@ end
 
 function PlaneRadonKernel(Rθ::RestrictedRadonTransform, hypervoxel_size::Vector{Float64})
     a = hypervoxel_size ./ 2.0
-    aθ = reduce(a .* Rθ.angle)
+    aθ = reduce(a .* Rθ.angle, ϵ=Rθ.reduction_threshold)
     ℓ = length(aθ)
     d = Rθ.dim
     prefactor = 2^(d - ℓ) * prod(a) / prod(aθ) / factorial(ℓ - 1)
@@ -106,7 +107,7 @@ end
 
 function SlabRadonKernel(Rθ::RestrictedRadonTransform, hypervoxel_size::Vector{Float64})
     a = hypervoxel_size ./ 2.0
-    aθ = reduce(a .* Rθ.angle)
+    aθ = reduce(a .* Rθ.angle, ϵ=Rθ.reduction_threshold)
     ℓ = length(aθ)
     d = Rθ.dim
     prefactor = 2^(d - ℓ) * prod(a) / prod(aθ) / factorial(ℓ) / Rθ.width
@@ -158,7 +159,7 @@ end
 function (R::RadonTransform)(P::Phantom)
     S = zeros(Float64,  R.num_radii, R.num_angles)
     @threads for ℓ in 1:R.num_angles
-        Rθ = RestrictedRadonTransform(R.radii, R.angles[ℓ, :], width=R.width)
+        Rθ = RestrictedRadonTransform(R.radii, R.angles[ℓ, :], width=R.width, reduction_threshold=R.reduction_threshold)
         S[:, ℓ] = Rθ(P)
     end
     return Sinogram(S, R.radii, R.angles)
