@@ -218,3 +218,14 @@ function uniform_circle(quantity::Int64)
     end
     return θ
 end
+
+function fibonacci_sphere(quantity::Int64)
+    φ = π * (3 - sqrt(5))
+	θ = zeros(quantity, 3)
+    for k in 1:quantity
+		θ[k, 3] = 1 - 2 * (k - 0.5) / quantity
+		θ[k, 2] = sqrt(1 - θ[k, 3]^2) * sin(φ * (k - 1))
+    	θ[k, 1] = sqrt(1 - θ[k, 3]^2) * cos(φ * (k - 1))
+	end
+	return θ
+end

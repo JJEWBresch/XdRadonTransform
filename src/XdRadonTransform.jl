@@ -11,10 +11,12 @@ export RadonTransform3d
 
 export Phantom, Sinogram
 
+export uniform_radii, uniform_circle, fibonacci_sphere
+
 include("TestImages.jl")
 include("DataTransformations.jl")
 
 include("RadonTransform.jl")
-include("RadonTransform3d.jl")
+# include("RadonTransform3d.jl")
 
 end # module XdRadonTransform
