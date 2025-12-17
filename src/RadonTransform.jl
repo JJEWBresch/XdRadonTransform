@@ -205,3 +205,7 @@ function search_max_radius(radii::Vector{Float64}, value::Float64)
         return searchsortedfirst(radii, value) - 1
     end    
 end
+
+function uniform_radii(quantity::Inf64, max_radius::Float64=1.0)
+    return collect(LinRange(-max_radius, max_radius, quantity))
+end
