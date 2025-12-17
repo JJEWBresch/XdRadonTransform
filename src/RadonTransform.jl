@@ -229,3 +229,12 @@ function fibonacci_sphere(quantity::Int64)
 	end
 	return θ
 end
+
+function random_spherical_directions(dimension::Int64, quantity::Int64)
+    θ = zeros(quantity, dimension)
+    for k in 1:quantity
+        v = randn(dimension)
+        θ[k, :] = v ./ norm(v)
+    end
+    return θ
+end

@@ -11,7 +11,7 @@ export RadonTransform3d
 
 export Phantom, Sinogram
 
-export uniform_radii, uniform_circle, fibonacci_sphere
+export uniform_radii, uniform_circle, fibonacci_sphere, random_spherical_directions
 
 include("TestImages.jl")
 include("DataTransformations.jl")
