@@ -36,7 +36,6 @@ end
 struct Phantom
     data::Array{Float64}
     hypervoxel_size::Vector{Float64}
-    # TODO: check dimensions
 end
 
 #function Phantom(image::AbstractMatrix)
