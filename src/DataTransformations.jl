@@ -15,16 +15,19 @@ export ElasticNoise
 struct RandomAffineTransformation
     scaling_x::Tuple{Float64, Float64}
     scaling_y::Tuple{Float64, Float64}
+    scaling_i::Tuple{Float64, Float64}
     rotating::Tuple{Float64, Float64}
     shearing_x::Tuple{Float64, Float64}
     shearing_y::Tuple{Float64, Float64}
     translating_x::Tuple{Int64, Int64}
     translating_y::Tuple{Int64, Int64}
-    function RandomAffineTransformation(scx, scy, rot, shx, shy, tax, tay)
+    function RandomAffineTransformation(scx, scy, sci, rot, shx, shy, tax, tay)
         if !(0 <= scx[1] <= scx[2]) 
             error("inconsistent x scaling")
         elseif !(0 <= scy[1] <= scy[2]) 
             error("inconsistent y scaling")
+        elseif !(0 <= sci[1] <= sci[2]) 
+            error("inconsistent isotropic scaling")
         elseif !(rot[1] <= rot[2]) 
             error("inconsistent rotating")
         elseif !(shx[1] <= shx[2]) 
@@ -36,25 +39,27 @@ struct RandomAffineTransformation
         elseif !(tay[1] <= tay[2]) 
             error("inconsistent y translating")
         end
-        return new(scx, scy, rot, shx, shy, tax, tay)
+        return new(scx, scy, sci, rot, shx, shy, tax, tay)
     end
 end
 
 function RandomAffineTransformation(;
     scale_x::Tuple{Float64, Float64}=(1.0, 1.0),
     scale_y::Tuple{Float64, Float64}=(1.0, 1.0),
+    scale_i::Tuple{Float64, Float64}=(1.0, 1.0),
     rotate::Tuple{Float64, Float64}=(0.0, 0.0),
     shear_x::Tuple{Float64, Float64}=(0.0, 0.0),
     shear_y::Tuple{Float64, Float64}=(0.0, 0.0),
     shift_x::Tuple{Int64, Int64}=(0, 0),
     shift_y::Tuple{Int64, Int64}=(0, 0)
 )
-    return RandomAffineTransformation(scale_x, scale_y, rotate, shear_x, shear_y, shift_x, shift_y)
+    return RandomAffineTransformation(scale_x, scale_y, scale_i, rotate, shear_x, shear_y, shift_x, shift_y)
 end
 
 function (A::RandomAffineTransformation)(image::AbstractMatrix)
-    I = Gray{Float64}.(image) #Gray{Float64}.(image)
-    I = scaling(I, randu(A.scaling_x), randu(A.scaling_y))
+    I = Gray{Float64}.(image)
+    sci = randu(A.scaling_i)
+    I = scaling(I, sci*randu(A.scaling_x), sci*randu(A.scaling_y))
     I = rotate(I, randu(A.rotating))
     I = shear(I, randu(A.shearing_x), randu(A.shearing_y))
     I = translate(I, randi(A.translating_x), randi(A.translating_y))
@@ -341,6 +346,7 @@ struct RandomAffineTransformation3d
     scaling_x::Tuple{Float64, Float64}
     scaling_y::Tuple{Float64, Float64}
     scaling_z::Tuple{Float64, Float64}
+    scaling_i::Tuple{Float64, Float64}
     rotating_x::Tuple{Float64, Float64}
     rotating_y::Tuple{Float64, Float64}
     rotating_z::Tuple{Float64, Float64}
@@ -353,13 +359,15 @@ struct RandomAffineTransformation3d
     translating_x::Tuple{Int64, Int64}
     translating_y::Tuple{Int64, Int64}
     translating_z::Tuple{Int64, Int64}
-    function RandomAffineTransformation3d(scx, scy, scz, rotx, roty, rotz, shxy, shyx, shyz, shzy, shxz, shzx, tax, tay, taz)
+    function RandomAffineTransformation3d(scx, scy, scz, sci, rotx, roty, rotz, shxy, shyx, shyz, shzy, shxz, shzx, tax, tay, taz)
         if !(0 <= scx[1] <= scx[2]) 
             error("inconsistent x scaling")
         elseif !(0 <= scy[1] <= scy[2]) 
             error("inconsistent y scaling")
         elseif !(0 <= scz[1] <= scz[2]) 
             error("inconsistent z scaling")
+        elseif !(0 <= sci[1] <= sci[2]) 
+            error("inconsistent isotropic scaling")
         elseif !(rotx[1] <= rotx[2]) 
             error("inconsistent x rotating")
         elseif !(roty[1] <= roty[2]) 
@@ -385,7 +393,7 @@ struct RandomAffineTransformation3d
         elseif !(taz[1] <= taz[2]) 
             error("inconsistent z translating")
         end
-        return new(scx, scy, scz, rotx, roty, rotz, shxy, shyx, shyz, shzy, shxz, shzx, tax, tay, taz)
+        return new(scx, scy, scz, sci, rotx, roty, rotz, shxy, shyx, shyz, shzy, shxz, shzx, tax, tay, taz)
     end
 end
 
@@ -393,6 +401,7 @@ function RandomAffineTransformation3d(;
     scale_x::Tuple{Float64, Float64}=(1.0, 1.0),
     scale_y::Tuple{Float64, Float64}=(1.0, 1.0),
     scale_z::Tuple{Float64, Float64}=(1.0, 1.0),
+    scale_i::Tuple{Float64, Float64}=(1.0, 1.0),
     rotate_x::Tuple{Real, Real}=(0.0, 0.0),
     rotate_y::Tuple{Real, Real}=(0.0, 0.0),
     rotate_z::Tuple{Real, Real}=(0.0, 0.0),
@@ -406,12 +415,13 @@ function RandomAffineTransformation3d(;
     shift_y::Tuple{Int64, Int64}=(0, 0),
     shift_z::Tuple{Int64, Int64}=(0, 0)
 )
-    return RandomAffineTransformation3d(scale_x, scale_y, scale_z, rotate_x, rotate_y, rotate_z, shear_xy, shear_yx, shear_yz, shear_zy, shear_xz, shear_zx, shift_x, shift_y, shift_z)
+    return RandomAffineTransformation3d(scale_x, scale_y, scale_z, scale_i, rotate_x, rotate_y, rotate_z, shear_xy, shear_yx, shear_yz, shear_zy, shear_xz, shear_zx, shift_x, shift_y, shift_z)
 end
 
 function (A::RandomAffineTransformation3d)(image::AbstractArray)
-    I = image                 
-    I = scaling3d(I, randu(A.scaling_x), randu(A.scaling_y), randu(A.scaling_z))  
+    I = image         
+    sci = randu(A.scaling_i)        
+    I = scaling3d(I, sci*randu(A.scaling_x), sci*randu(A.scaling_y), sci*randu(A.scaling_z))  
     I = rotate3d(I, randu(A.rotating_x), randu(A.rotating_y), randu(A.rotating_z))
     I = shear3d(I, randu(A.shearing_xy), randu(A.shearing_yx), randu(A.shearing_yz), randu(A.shearing_zy), randu(A.shearing_xz), randu(A.shearing_zx))
     I = translate3d(I, randi(A.translating_x), randi(A.translating_y), randi(A.translating_z))
