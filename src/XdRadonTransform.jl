@@ -8,19 +8,20 @@ using StatsFuns
 export TestImages
 export DataTransformations
 
-export RadonTransform
-export RadonTransform3d
-
+export RadonTransform, RadonTransformRay
 export Phantom, Sinogram
 
-export scale
+export RestrictedJohnTransform
+export PhantomBox, RestrictedSinogram
 
-export uniform_radii, uniform_circle, fibonacci_spherical_directions, random_spherical_directions, sobol_spherical_directions
+export scale, tangent_grid
+
+export uniform_radii, uniform_circle, fibonacci_spherical_directions, random_spherical_directions, sobol_spherical_directions, sw_distance
 
 include("TestImages.jl")
 include("DataTransformations.jl")
 
 include("RadonTransform.jl")
-# include("RadonTransform3d.jl")
+include("JohnTransform.jl")
 
 end # module XdRadonTransform
