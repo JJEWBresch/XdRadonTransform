@@ -30,9 +30,9 @@ using LinearAlgebra, Optimisers, Statistics
 
 # ╔═╡ e1a3e10c-6ae3-45c0-b65d-14e17778a0b9
 md"""
-# arXiv:xxxx.xxxxx -- Table x, Figure x
+# arXiv:xxxx.xxxxx -- Section IV.B and Figure 10 and 11
 This pluto notebook reproduces the numerical visualizations
-with tamplates for Figure x from
+of the target measures from Figure 10 (a) and (b) from
 
 - Robert Beinert, Jonas Bresch, and Michael Quellmalz
   '*A Discrete Radon Transform Based on the Area of Cube-Plane Intersection*',

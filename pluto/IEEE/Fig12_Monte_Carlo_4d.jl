@@ -7,11 +7,9 @@ using InteractiveUtils
 # ╔═╡ 8cbe0300-edff-11ef-2fad-d3b8cca171a9
 begin
 	import Pkg
-	Pkg.activate("..")  
+	Pkg.activate("../..")  
 	using Revise
 	using XdRadonTransform
-	using XdRadonTransform.DataTransformations
-	using XdRadonTransform.TestImages
 	using Images
 	using Plots
 	using IterTools
@@ -35,9 +33,9 @@ using LinearAlgebra
 
 # ╔═╡ a1aab451-32cb-4346-84ee-e180058dda75
 md"""
-# arXiv:xxxx.xxxxx -- Table x, Figure x
+# arXiv:xxxx.xxxxx -- Section V and Figure 12
 This pluto notebook reproduces the numerical visualizations
-with tamplates for Figure x from
+of the Figure 12
 
 - Robert Beinert, Jonas Bresch, and Michael Quellmalz
   '*A Discrete Radon Transform Based on the Area of Cube-Plane Intersection*',
@@ -72,14 +70,17 @@ begin
 	r = 128
 	radii = collect(LinRange(-sqrt(4)/2*(d),sqrt(4)/2*(d),r))
 	angles = sobol_spherical_directions(4, 128)
-	R = RadonTransform(radii,angles;width=0.01)
+	R = RadonTransform(radii,angles) # ;width=0.01)
 end
+
+# ╔═╡ d8b2a5bb-8cad-4d10-be35-c0f21a755bb4
+Plots.scatter3d(angles[:,1],angles[:,2],angles[:,3])
 
 # ╔═╡ 335f4a75-a720-4433-942f-c18168c06208
 begin
 	RBox = R(PBox)
 	Plots.heatmap(RBox.data)
-	RBox.data
+	# RBox.data
 end
 
 # ╔═╡ 44ca8090-3794-44b2-83e9-84225c5cde79
@@ -248,7 +249,7 @@ begin
 	label = L"\textrm{MC} (N = 2^{16})", color=:orange)
 	Plots.plot!(RrBox,
 	fontfamily="Computer Modern",
-	xticks = ([1,32,64,96,128], round.(radii,digits=4)[[1,32,64,96,128]]),
+	xticks = ([1,32,64,96,128], round.(radii,digits=1)[[1,32,65,96,128]]),
 	label = "Exact", color=:darkred, legend=:false)
 end
 
@@ -337,7 +338,7 @@ begin
 	p₄ = Plots.plot!(L₅./10,
 	label = L"\mathbb{E}|\textrm{Exact} - \textrm{MC}(N = 2^{16})|",
 	fontfamily="Computer Modern", color=:orange,
-	xticks = ([1,32,64,96,128], round.(radii,digits=4)[[1,32,64,96,128]]))
+	xticks = ([1,32,64,96,128], round.(radii,digits=1)[[1,32,65,96,128]]))
 end
 
 # ╔═╡ a8a7167f-af5b-4bbc-95ff-3a012e2bd6e2
@@ -376,25 +377,26 @@ Plots.savefig(p₄, "exact_MC_mean_diff_765.pdf")
 
 # ╔═╡ Cell order:
 # ╠═8cbe0300-edff-11ef-2fad-d3b8cca171a9
-# ╠═a1aab451-32cb-4346-84ee-e180058dda75
+# ╟─a1aab451-32cb-4346-84ee-e180058dda75
 # ╠═c20ec051-9ae9-40f7-97cb-7abf2baf4fe4
 # ╠═1fa304a4-ecf5-4645-8f3a-90aedde4323e
 # ╠═178b1a7f-ceeb-43ba-9006-e2c5fd7f6b05
 # ╠═62aa8854-c7b6-4da4-a904-22d56ed5364c
 # ╠═626dc57d-e8f1-4e7a-ace8-4d18ebb76bbe
 # ╠═9a88aa43-f6b6-458a-939b-a91510bdf571
-# ╠═c4a5b59b-5cc9-477a-9c9c-c195418c5c7d
+# ╟─c4a5b59b-5cc9-477a-9c9c-c195418c5c7d
 # ╠═8d783205-ffa0-4ac6-957c-706b7505806b
+# ╠═d8b2a5bb-8cad-4d10-be35-c0f21a755bb4
 # ╠═335f4a75-a720-4433-942f-c18168c06208
 # ╠═44ca8090-3794-44b2-83e9-84225c5cde79
 # ╠═26c8e445-9060-4001-b47f-74a4d8ea4e61
 # ╠═0ebabfea-d457-4730-9be4-d142f8278898
-# ╠═a739eb0d-4332-4d72-83d9-c08aefea3946
+# ╟─a739eb0d-4332-4d72-83d9-c08aefea3946
 # ╠═84a05c40-42d3-4203-8b67-3c9b9e112ec1
 # ╠═05261121-56b9-43cd-901e-1fb5de310158
-# ╠═905e0059-98b9-43b2-9a24-ceee36478f8a
+# ╟─905e0059-98b9-43b2-9a24-ceee36478f8a
 # ╠═11adfc9f-73d4-4cad-86a5-b99a2fc16d34
-# ╠═797d6640-c5ea-4319-8264-6a03ccfd7e06
+# ╟─797d6640-c5ea-4319-8264-6a03ccfd7e06
 # ╠═9762efb6-93d7-478f-bab6-5040e25fd064
 # ╠═555352d0-a8cf-4da5-8078-fb2dc4fdeed4
 # ╠═88dd0b48-2e3c-4024-9c4a-bc69caad8771

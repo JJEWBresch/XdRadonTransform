@@ -27,7 +27,7 @@ using Markdown, InteractiveUtils
 using Interpolations: LinearInterpolation
 
 # ╔═╡ dde2b58d-f858-4201-8fa8-94165d256b66
-using Statistics, Random, LinearAlgebra, ImageFiltering
+using Statistics, Random, LinearAlgebra
 
 # ╔═╡ 2d6b3f00-18f6-4500-820f-2c931ddb7dd1
 using FFTW
@@ -35,24 +35,24 @@ using FFTW
 # ╔═╡ fa74a3c9-24a0-41ab-951e-dd35755808f0
 using MultivariateStats
 
-# ╔═╡ b6a5c24e-bc62-44e2-b1a8-9ef5782be851
-using StatsBase
-
 # ╔═╡ 213c7f64-bd0e-4485-aed0-f36d2a398f66
 using Clustering
 
-# ╔═╡ 6c52eb49-2114-49b0-86ab-52e6079bbfbb
+# ╔═╡ e3fbd24c-7e4d-4841-b028-53fda048ac00
+using StatsBase
+
+# ╔═╡ 80b0dd3a-69ae-48df-abac-c8de5625fe2e
 md"""
-# arXiv:xxxx.xxxxx -- Table x, Figure x
+# arXiv:xxxx.xxxxx -- Section III.E
 This pluto notebook reproduces the numerical visualizations
-with tamplates for Figure x from
+with tamplates for Figure 4 and 5 (first template, affinely transformed) from
 
 - Robert Beinert, Jonas Bresch, and Michael Quellmalz
   '*A Discrete Radon Transform Based on the Area of Cube-Plane Intersection*',
   arXiv:xxxx.xxxxx, 2026.
 """
 
-# ╔═╡ 1dbe005e-b755-402e-bfaf-bc54f727901b
+# ╔═╡ 1c634e17-e792-47ec-bab8-2bcdb342bed7
 md"""
 ## Dataset
 Load the reduced `ModelNet10` dataset.
@@ -65,7 +65,7 @@ Further information about ModelNet10 can be found in
   1912--920 (2015). 
 """
 
-# ╔═╡ 61f804c7-0c29-4ebd-a101-51cd5b032d79
+# ╔═╡ 010cf880-a1c8-49f2-bad2-80fcfecbc7ce
 begin
 	voxel_bathtub = load("../../data/smallModelNet10/voxel_bathtub.jld2")["voxel_bathtub"]
 	voxel_bed = load("../../data/smallModelNet10/voxel_bed.jld2")["voxel_bed"]
@@ -79,12 +79,73 @@ begin
 	voxel_toilet = load("../../data/smallModelNet10/voxel_toilet.jld2")["voxel_toilet"]
 end
 
-# ╔═╡ e5f176c0-32c6-4879-98e4-15904cccd8ee
+# ╔═╡ c86866df-5730-4f2a-86d0-88e4b9bdba1a
+begin
+	smallModelNet10 = [voxel_bathtub[1],voxel_bed[1],voxel_chair[1],voxel_desk[1],voxel_dresser[1],voxel_monitor[1],voxel_night_stand[1],voxel_sofa[1],voxel_table[1],voxel_toilet[1]]
+	Label = 1:10
+end
+
+# ╔═╡ 06c66cd3-1324-4592-930e-73587ec0c5b6
+begin
+	function extend_3d(A::AbstractArray,d::Int64)
+		dd = max(d,128)
+		voxel_array = zeros(dd,dd,dd)
+		voxel_array[dd÷4:dd÷4+63,dd÷4:dd÷4+63,dd÷4:dd÷4+63] = A
+		return voxel_array
+	end
+	ModelNet10 = extend_3d.(smallModelNet10,128)
+end
+
+# ╔═╡ 7cd2d106-cbe1-4ef6-8efc-a3340d059793
+md"""
+## Template Dataset
+Generate the template dataset
+using the submodule `TestImages`.
+"""
+
+# ╔═╡ 7b8ca11e-b3a8-4455-8811-c74097d2d50f
+Class, Labels = generate_academic_classes_3d(ModelNet10, Label, class_size=10);
+
+# ╔═╡ 5f8ec9ae-d81c-4335-85de-f15048d9bbcf
+A = RandomAffineTransformation3d(
+	rotate_x = (-π,π),
+	rotate_y = (-π,π),
+	rotate_z = (-π,π),
+	scale_x = (0.5, 1.25),
+	scale_y = (0.5, 1.25),
+	scale_z = (0.5, 1.25),
+	shear_xy = (-0.45, 0.45),
+	shear_yx = (-0.45, 0.45),
+	shear_xz = (-0.45, 0.45),
+	shear_zx = (-0.45, 0.45),
+	shear_yz = (-0.45, 0.45),
+	shear_zy = (-0.45, 0.45),
+	shift_x = (-10,10),
+	shift_y = (-10,10),
+	shift_z = (-10,10)
+)
+
+# ╔═╡ 41f9d8c0-5cb5-4068-b253-033147dd3449
+AClass = A.(Class)
+
+# ╔═╡ 05c285a0-328a-48f4-bb43-888f4d180339
+for k in 1:length(AClass)
+	AClass[k][isnan.(AClass[k])] .= 0.0;
+	k += 1
+end
+
+# ╔═╡ 03fc0177-5d3d-4ff0-abe9-3ba7c9e11740
+begin
+	PNet = Phantom.(ModelNet10)
+	PClass = Phantom.(AClass)
+end
+
+# ╔═╡ 5999b3b7-7a53-40a2-b8df-1e05887e91ac
 md"""
 ### Help functions for the Daras-style preprocessing
 """
 
-# ╔═╡ 6fddb07c-351d-4beb-9e08-0e0400c4c237
+# ╔═╡ a6d430f2-1f9b-4b44-9e22-2e064849aa12
 begin
 	function voxel_centroid(vol)
 	    nx, ny, nz = size(vol)
@@ -282,7 +343,7 @@ begin
 	end
 end
 
-# ╔═╡ f5b1c427-65d7-4768-b687-89f73facf5ce
+# ╔═╡ a91c4339-41f2-469c-9e55-50c1732906ec
 md"""
 ## Daras-style preprocessing with optional PCA alignment.
 Further information can be found in
@@ -377,6 +438,23 @@ function preprocess_daras(voxels::AbstractArray{<:Real,3};
     return out
 end
 
+# ╔═╡ a2d9776f-3e8a-428f-af93-dd16ff86ad75
+# ╠═╡ disabled = true
+#=╠═╡
+begin
+	pvoxel_bathtub = preprocess_daras.(AClass[1:10]; pca_align=true)
+	pvoxel_bed = preprocess_daras.(AClass[11:20]; pca_align=true)
+	pvoxel_chair = preprocess_daras.(AClass[21:30]; pca_align=true)
+	pvoxel_desk = preprocess_daras.(AClass[31:40]; pca_align=true)
+	pvoxel_dresser = preprocess_daras.(AClass[41:50]; pca_align=true)
+	pvoxel_monitor = preprocess_daras.(AClass[51:60]; pca_align=true)
+	pvoxel_night_stand = preprocess_daras.(AClass[61:70]; pca_align=true)
+	pvoxel_sofa = preprocess_daras.(AClass[71:80]; pca_align=true)
+	pvoxel_table = preprocess_daras.(AClass[81:90]; pca_align=true)
+	pvoxel_toilet = preprocess_daras.(AClass[91:100]; pca_align=true)
+end
+  ╠═╡ =#
+
 # ╔═╡ 13832bcd-831f-445a-bb50-fab64300211f
 #=╠═╡
 GLMakie.volume(pvoxel_bathtub[1], algorithm=:mip, colormap=:magma)
@@ -406,7 +484,10 @@ end
 # ╔═╡ 837b8fa2-b7e8-4850-a513-69c03d35a45b
 TT = sphere_angles(20,16)
 
-# ╔═╡ ef458df7-1a1e-4b1f-8f0e-9cff78c15026
+# ╔═╡ 3daa2232-071d-493c-aa58-f1b8d0cef86a
+Plots.scatter3d(TT[:,1], TT[:,2], TT[:,3])
+
+# ╔═╡ a75c6ac8-86a0-479d-aa87-e5bde563d22b
 md"""
 ## Radon transform
 Setup the Radon transform in `3d`
@@ -428,29 +509,16 @@ end
 # ╔═╡ 107302bd-01ad-4787-aa96-61d6e93b08b7
 #=╠═╡
 begin
-	phvoxel_bathtub = Phantom.(pvoxel_bathtub)
-	#phvoxel_bed = Phantom.(pvoxel_bed)
-	phvoxel_chair = Phantom.(pvoxel_chair)
-	#phvoxel_desk = Phantom.(pvoxel_desk)
-	phvoxel_dresser = Phantom.(pvoxel_dresser)
-	#phvoxel_monitor = Phantom.(pvoxel_monitor)
-	#phvoxel_night_stand = Phantom.(pvoxel_night_stand)
-	#phvoxel_sofa = Phantom.(pvoxel_sofa)
-	#phvoxel_table = Phantom.(pvoxel_table)
-	#phvoxel_toilet = Phantom.(pvoxel_toilet)
-end
-  ╠═╡ =#
-
-# ╔═╡ 6db2d381-c783-408d-bd16-b27b366647db
-#=╠═╡
-begin
-	phvoxel_bed = Phantom.(pvoxel_bed)
-	phvoxel_desk = Phantom.(pvoxel_desk)
-	phvoxel_monitor = Phantom.(pvoxel_monitor)
-	phvoxel_night_stand = Phantom.(pvoxel_night_stand)
-	phvoxel_sofa = Phantom.(pvoxel_sofa)
-	phvoxel_table = Phantom.(pvoxel_table)
-	phvoxel_toilet = Phantom.(pvoxel_toilet)
+	phvoxel_bathtub = Phantom.(pvoxel_bathtub[1:10])
+	phvoxel_bed = Phantom.(pvoxel_bed[1:10])
+	phvoxel_chair = Phantom.(pvoxel_chair[1:10])
+	phvoxel_desk = Phantom.(pvoxel_desk[1:10])
+	phvoxel_dresser = Phantom.(pvoxel_dresser[1:10])
+	phvoxel_monitor = Phantom.(pvoxel_monitor[1:10])
+	phvoxel_night_stand = Phantom.(pvoxel_night_stand[1:10])
+	phvoxel_sofa = Phantom.(pvoxel_sofa[1:10])
+	phvoxel_table = Phantom.(pvoxel_table[1:10])
+	phvoxel_toilet = Phantom.(pvoxel_toilet[1:10])
 end
   ╠═╡ =#
 
@@ -458,23 +526,10 @@ end
 #=╠═╡
 begin
 	rvoxel_bathtub = R.(phvoxel_bathtub)
-	#rvoxel_bed = R.(phvoxel_bed)
-	rvoxel_chair = R.(phvoxel_chair)
-	#rvoxel_desk = R.(phvoxel_desk)
-	rvoxel_dresser = R.(phvoxel_dresser)
-	#rvoxel_monitor = R.(phvoxel_monitor)
-	#rvoxel_night_stand = R.(phvoxel_night_stand)
-	#rvoxel_sofa = R.(phvoxel_sofa)
-	#rvoxel_table = R.(phvoxel_table)
-	#rvoxel_toilet = R.(phvoxel_toilet)
-end
-  ╠═╡ =#
-
-# ╔═╡ 36de3800-4f60-4993-814d-b23a6998fc36
-#=╠═╡
-begin
 	rvoxel_bed = R.(phvoxel_bed)
+	rvoxel_chair = R.(phvoxel_chair)
 	rvoxel_desk = R.(phvoxel_desk)
+	rvoxel_dresser = R.(phvoxel_dresser)
 	rvoxel_monitor = R.(phvoxel_monitor)
 	rvoxel_night_stand = R.(phvoxel_night_stand)
 	rvoxel_sofa = R.(phvoxel_sofa)
@@ -487,23 +542,10 @@ end
 #=╠═╡
 begin
 	svoxel_bathtub = [reshape(r.data, (2048,29,21)) for r in rvoxel_bathtub]
-	#svoxel_bed = [reshape(r.data, (2048,19,16)) for r in rvoxel_bed]
-	svoxel_chair = [reshape(r.data, (2048,29,21)) for r in rvoxel_chair]
-	#svoxel_desk = [reshape(r.data, (2048,19,16)) for r in rvoxel_desk]
-	svoxel_dresser = [reshape(r.data, (2048,29,21)) for r in rvoxel_dresser]
-	#svoxel_monitor = [reshape(r.data, (2048,19,16)) for r in rvoxel_monitor]
-	#svoxel_night_stand = [reshape(r.data, (2048,19,16)) for r in rvoxel_night_stand]
-	#svoxel_sofa = [reshape(r.data, (2048,19,16)) for r in rvoxel_sofa]
-	#svoxel_table = [reshape(r.data, (2048,19,16)) for r in rvoxel_table]
-	#svoxel_toilet = [reshape(r.data, (2048,19,16)) for r in rvoxel_toilet]
-end
-  ╠═╡ =#
-
-# ╔═╡ b0570c95-a32c-405d-8c7e-81753cd65ff4
-#=╠═╡
-begin
 	svoxel_bed = [reshape(r.data, (2048,29,21)) for r in rvoxel_bed]
+	svoxel_chair = [reshape(r.data, (2048,29,21)) for r in rvoxel_chair]
 	svoxel_desk = [reshape(r.data, (2048,29,21)) for r in rvoxel_desk]
+	svoxel_dresser = [reshape(r.data, (2048,29,21)) for r in rvoxel_dresser]
 	svoxel_monitor = [reshape(r.data, (2048,29,21)) for r in rvoxel_monitor]
 	svoxel_night_stand = [reshape(r.data, (2048,29,21)) for r in rvoxel_night_stand]
 	svoxel_sofa = [reshape(r.data, (2048,29,21)) for r in rvoxel_sofa]
@@ -512,17 +554,12 @@ begin
 end
   ╠═╡ =#
 
-# ╔═╡ 12c6d50a-2717-4e69-a0d3-772abc972bab
-#=╠═╡
-svoxel_small = vcat(svoxel_bathtub, svoxel_chair, svoxel_dresser)
-  ╠═╡ =#
-
-# ╔═╡ a5ef78da-e311-4c3c-9daa-9566bead7059
+# ╔═╡ baa5029f-428f-4e48-8c6a-c31b643fa5cf
 #=╠═╡
 svoxel = vcat(svoxel_bathtub, svoxel_bed, svoxel_chair, svoxel_desk, svoxel_dresser, svoxel_monitor, svoxel_night_stand, svoxel_sofa, svoxel_table, svoxel_toilet)
   ╠═╡ =#
 
-# ╔═╡ 4016ba47-2b6e-4874-b9ac-e8ae2dc34d97
+# ╔═╡ da9fbc60-77eb-4952-acb5-7bba2e1fa045
 md"""
 ## Daras-style descriptors.
 Further information can be found in
@@ -716,7 +753,7 @@ end
 
 # ╔═╡ b5b4ae57-a437-4c40-8983-252ae845abf7
 #=╠═╡
-Plots.plot(evoxel[23])
+Plots.plot(evoxel[1])
   ╠═╡ =#
 
 # ╔═╡ 07884f89-cb26-4612-8530-a65c19146c52
@@ -734,7 +771,7 @@ end
 
 # ╔═╡ f108a5d8-b97a-4020-b170-7b28d2ea1d5b
 #=╠═╡
-zvoxel = [Zvoxel[:,k] for k in 1:30]
+zvoxel = [Zvoxel[:,k] for k in 1:100]
   ╠═╡ =#
 
 # ╔═╡ 6c878ab2-af36-4bda-a3b9-5903cc293e6f
@@ -761,238 +798,21 @@ Plots.heatmap(CZ)
 
 # ╔═╡ 3f5714c9-b4fc-464e-8caf-8008b4bbf593
 #=╠═╡
-C = confusion_map(evoxel,100)
+C = confusion_map(evoxel,2)
   ╠═╡ =#
-
-# ╔═╡ 315af15c-3de3-4e36-b0ab-d558b9d175b7
-begin
-	category_names = ["Bath Tub", "Bed", "Chair", "Desk", "Dresser", "Monitor", "Night Stand", "Sofa", "Table", "Toilet"]
-	block_size = 10
-	midpoints = [ (i - 1) * block_size + (block_size + 1) / 2 for i in 1:length(category_names) ]
-end
 
 # ╔═╡ 995cb023-6400-46e3-a691-4680f745a632
 #=╠═╡
-pc = Plots.heatmap(C,
-	fontfamily="Computer Modern",
-	xticks = (midpoints, category_names), # Apply custom positions and labels
-    xrotation = 45,                       # Rotate labels diagonally
-    yticks = (midpoints, category_names), # Same for Y-axis if needed
-    yrotation = 45,
-	halign = :right,
- 	size = (500, 400),)
+pc = Plots.heatmap(C)
   ╠═╡ =#
 
 # ╔═╡ 1a7082c4-bfcf-40cc-9263-7b5bc71f9156
 # ╠═╡ disabled = true
 #=╠═╡
-Plots.savefig(pc, "shape_matching_conf_map_2048_30_21_ord_∞.pdf")
+Plots.savefig(pc, "shape_matching_conf_map_2048_20_16_ord_2.pdf")
   ╠═╡ =#
 
-# ╔═╡ fce37cd1-db8c-46d1-92ee-3edfde070a7f
-md"""
-## Nearest Template and Neighbour Classification
-Use the nearest template or neighbour classification
-with respect to the chosen templates
-to classify the generated dataset.
-The normalized RCDT is applied
-with different numbers of used angles, normes, and variantes.
-"""
-
-# ╔═╡ 6b5108cf-f9cc-4925-b64e-b18f099d6896
-begin
-	function plot_quantiles(temp_q::AbstractArray, temp_lab::AbstractArray, data_q::AbstractArray, data_lab::AbstractArray, text)
-    dd = length(data_q[1])
-	    plt = Plots.plot(size = (500,350))
-	    color = [:blue, :red, :green, :orange, :purple, :brown]
-	    for i in 1:length(temp_lab), j in 1:length(data_lab)
-	        if data_lab[j] == temp_lab[i]
-	            Plots.plot!(plt, data_q[j], label=false, linecolor = RGBA((abs(0.5-(i-1)/(length(temp_lab)-1)))*(1-(i-1)/(length(temp_lab)-1))*0.99, ((i-1)/(length(temp_lab)-1))*(1-(i-1)/(length(temp_lab)-1))*0.99, (abs(0.5-(i-1)/(length(temp_lab)-1)))*((i-1)/(length(temp_lab)-1))*0.99, 0.5), yticks=true, xticks = (LinRange(0,dd,4), ["0", "0.25", "0.75", "1"]));
-	            # plot!(plt, data_q[j], label=false, linecolor = color[i], yticks=true, xticks = (LinRange(0,dd,4), ["0", "0.25", "0.75", "1"]));
-	        end
-	    end
-	    for i in 1:length(temp_lab)
-	        k = temp_lab[i]
-	        Plots.plot!(plt, temp_q[i], fontfamily="Computer Modern", 
-				# label=["class $k" "k"], 
-				label=text[i],
-				linewidth=2 , linecolor = RGBA((abs(0.5-(i-1)/(length(temp_lab)-1)))*(1-(i-1)/(length(temp_lab)-1))*0.99, ((i-1)/(length(temp_lab)-1))*(1-(i-1)/(length(temp_lab)-1))*0.85, (abs(0.5-(i-1)/(length(temp_lab)-1)))*((i-1)/(length(temp_lab)-1))*0.99, 1), yticks=true, xticks = (LinRange(0,dd,4), ["0", "0.25", "0.75", "1"]));    
-	        # plot!(plt, temp_q[i], legend=false, fontfamily="Computer Modern", label=["Class $k" "k"], linewidth=2 , linecolor = color[i], yticks=true, xticks = (LinRange(0,dd,4), ["0", "0.25", "0.75", "1"]));        
-	    end
-	    return plt
-	end
-	
-	function accuracy_nearest_neighbour(temp_q::AbstractArray, temp_lab::AbstractArray, data_q::AbstractArray, data_lab::AbstractArray, norm::String; ret::Int64=0)
-	    pred_rcdt = zeros(length(temp_q),length(data_q))
-	    for k in 1:length(data_q), kk in 1:length(temp_q)
-	        if norm=="inf"
-	            pred_rcdt[kk,k] = maximum(abs.(temp_q[kk] .- data_q[k]))
-	        end
-	        if norm=="euclidean"
-	            pred_rcdt[kk,k] = sqrt(sum((temp_q[kk] .- data_q[k]).*(temp_q[kk] .- data_q[k])))
-	        end
-	        if norm=="manhattan"
-	            pred_rcdt[kk,k] = sum(abs.(temp_q[kk] .- data_q[k]))
-	        end
-	    end
-	    pred_label_rcdt = argmin(pred_rcdt, dims=1)
-	    label_rcdt = zeros(length(data_q))
-	    for k in 1:length(data_q)
-	        label_rcdt[k] = temp_lab[pred_label_rcdt[k][1]]
-	    end 
-	    acc_rcdt = mean(data_lab .== label_rcdt)
-	    if ret==1
-	        @info "Acc. using $(norm)-norm : \t $(acc_rcdt)"
-	    end
-	    return acc_rcdt
-	end
-
-	function argmink(a::AbstractArray, k::Int64)
-	    b = partialsortperm(a, length(a)-k+1:length(a), rev=true)
-	    # return collect(zip(b, a[b]))
-	    return collect(b[end:-1:1])
-	end
-	
-	function argmaxk(a::AbstractArray, k::Int64)
-	    b = partialsortperm(a, 1:k, rev=true)
-	    # return collect(zip(b, a[b]))
-	    return collect(b)
-	end
-	
-	function slice_matrix(A::AbstractMatrix)
-	    return [c[:] for c in eachcol(A)]
-	end
-	
-	function accuracy_k_nearest_neighbour(
-	    temp_q::AbstractArray, 
-	    temp_lab::AbstractArray, 
-	    data_q::AbstractArray, 
-	    data_lab::AbstractArray,
-	    norm::String;
-	    K::Int64=1, 
-	    ret::Int64=0)
-	
-	    temp_q = collect.(Iterators.flatten.(collect.(temp_q)))
-	    data_q = collect.(Iterators.flatten.(collect.(data_q)))
-	
-	    pred_rcdt = zeros(length(temp_q),length(data_q))
-	    for k in 1:length(data_q), kk in 1:length(temp_q)
-	        if norm=="inf"
-	            pred_rcdt[kk,k] = maximum(abs.(temp_q[kk] .- data_q[k]))
-	        end
-	        if norm=="euclidean"
-	            pred_rcdt[kk,k] = sqrt(sum((temp_q[kk] .- data_q[k]).*(temp_q[kk] .- data_q[k])))
-	        end
-	        if norm=="manhattan"
-	            pred_rcdt[kk,k] = sum(abs.(temp_q[kk] .- data_q[k]))
-	        end
-	    end
-	    # pred_label_rcdt = argmin(pred_rcdt, dims=1)
-	    K_pred_index_rcdt = argmink.(slice_matrix(pred_rcdt), K)
-	    K_pred_label_rcdt = zeros(length(K_pred_index_rcdt),K)
-	    for l in 1:K, ll in 1:length(K_pred_index_rcdt)
-	        K_pred_label_rcdt[ll,l] = temp_lab[K_pred_index_rcdt[ll][l]]
-	    end
-	    dict_K_pred_label_rcdt = countmap.(slice_matrix(transpose(Int64.(K_pred_label_rcdt))))
-	    pred_label_rcdt = findmax.(dict_K_pred_label_rcdt) 
-	    label_rcdt = zeros(length(pred_label_rcdt))
-	    for k in 1:length(data_q)
-	        label_rcdt[k] = pred_label_rcdt[k][2]
-	    end 
-	    acc_rcdt = mean(data_lab .== label_rcdt)
-	    # conf_matrix = confusion_matrix(data_lab, label_rcdt) 
-	    if ret==1
-	        @info "Acc. using $(norm)-norm : \t $(acc_rcdt)"
-	    end
-	    return acc_rcdt #, conf_matrix
-	end
-
-	function accuracy_k_nearest_part_neighbour(
-	    part::Int64, 
-	    samp::Int64, 
-	    class_size::Int64, 
-	    class_number::Int64, 
-	    data_q::AbstractArray, 
-	    data_lab::AbstractArray, 
-	    norm::String; 
-	    K::Int64=1,
-	    ret::Int64=0)
-	
-	    # variabel cross <-- TO DO
-	
-	    if samp > class_size
-	        return "Error : unexpected devision of classes."
-	    end
-	    if ret==1
-	        conf_matrix = zeros(length(unique(data_lab)), length(unique(data_lab)))
-	    end
-	
-	    acc_rcdt = zeros(part)
-	    size_data = length(data_lab)
-	    
-	    for i in 1:part
-	        split_range = []
-	        for l in 1:class_number
-	            choice = collect(1+(l-1)*class_size:l*class_size)
-	            shuffle!(choice)
-	            append!(split_range, choice[1:samp])
-	        end
-
-			train_data_q = data_q[split_range]
-	        train_labels = data_lab[split_range]
-	
-	        test_range = Array(1:size_data)
-	        test_range = filter(e->!(e in split_range),test_range)
-	
-	        test_data_q = data_q[test_range]
-	        test_labels = data_lab[test_range]
-	
-	        # acc_rcdt[i], conf_matrix_part = accuracy_k_nearest_neighbour(train_data_q, train_labels, test_data_q, test_labels, norm, K=K)
-	        acc_rcdt[i] = accuracy_k_nearest_neighbour(train_data_q, train_labels, test_data_q, test_labels, norm, K=K)
-	        if ret==1
-	            conf_matrix += conf_matrix_part 
-	        end
-	    end
-	    @info "Acc. using $(norm)-norm : \t $(mean(acc_rcdt)) +/- $(std(acc_rcdt))"
-	    if ret==1
-	        return conf_matrix
-	    end
-	end
-end
-
-# ╔═╡ e12baad1-e10c-4ca5-a475-8f2497fe7dd8
-begin
-	Labels = vcat(ones(10), 3*ones(10), 5*ones(10))
-	# Labels = vcat(ones(10), 2*ones(10), 3*ones(10), 4*ones(10), 5*ones(10), 6*ones(10), 7*ones(10), 8*ones(10), 9*ones(10), 10*ones(10))
-	Labels = Int64.(Labels)
-end
-
-# ╔═╡ f0115f0b-6098-4dd8-bc89-986200517a0d
-#=╠═╡
-Plots.plot(evoxel[1:10])
-  ╠═╡ =#
-
-# ╔═╡ c91fb98e-a4dc-4ed3-9714-98f53e309114
-#=╠═╡
-Plots.plot(evoxel[21:30])
-  ╠═╡ =#
-
-# ╔═╡ dea83ba3-1f0a-4108-8bed-5c96cca74415
-#=╠═╡
-Plots.plot(evoxel[41:50])
-  ╠═╡ =#
-
-# ╔═╡ 1b62e877-3f34-42ca-8e3f-65946597ee63
-#=╠═╡
-begin
-	K = 5
-	accuracy_k_nearest_part_neighbour(20, K, 10, 3, evoxel, Labels, "manhattan", K=1, ret=0)
-	accuracy_k_nearest_part_neighbour(20, K, 10, 3, evoxel, Labels, "euclidean", K=1, ret=0)
-	accuracy_k_nearest_part_neighbour(20, K, 10, 3, evoxel, Labels, "inf", K=1, ret=0)
-end
-  ╠═╡ =#
-
-# ╔═╡ 17564f50-2463-4625-af9f-efd2523dece4
+# ╔═╡ 37567a53-6a72-4d9f-996f-98e31af48feb
 md"""
 ### Data similarity, used in Daras' paper.
 `daras_similarity`(DA, DB; eps_den=1e-12)
@@ -1072,7 +892,7 @@ Plots.heatmap(CD.>66.6)
 
 # ╔═╡ 4284e5b2-552b-4da7-9138-f88bdd4f4413
 #=╠═╡
-kEvoxel = kmeans(Zvoxel, 3, maxiter=100, display=:iter)
+kEvoxel = kmeans(Zvoxel, 10, maxiter=100, display=:iter)
   ╠═╡ =#
 
 # ╔═╡ 6631451f-2729-49c2-92f3-e4aa83ab5462
@@ -1080,72 +900,243 @@ kEvoxel = kmeans(Zvoxel, 3, maxiter=100, display=:iter)
 Plots.plot(kEvoxel.assignments)
   ╠═╡ =#
 
-# ╔═╡ a2d9776f-3e8a-428f-af93-dd16ff86ad75
-#=╠═╡
-begin
-	ℓ=10
-	pvoxel_bathtub = preprocess_daras.(voxel_bathtub[1:ℓ]; pca_align=true)
-	pvoxel_bed = preprocess_daras.(voxel_bed[1:ℓ]; pca_align=true)
-	pvoxel_chair = preprocess_daras.(voxel_chair[1:ℓ]; pca_align=true)
-	pvoxel_desk = preprocess_daras.(voxel_desk[1:ℓ]; pca_align=true)
-	pvoxel_dresser = preprocess_daras.(voxel_dresser[1:ℓ]; pca_align=true)
-	pvoxel_monitor = preprocess_daras.(voxel_monitor[1:ℓ]; pca_align=true)
-	pvoxel_night_stand = preprocess_daras.(voxel_night_stand[1:ℓ]; pca_align=true)
-	pvoxel_sofa = preprocess_daras.(voxel_sofa[1:ℓ]; pca_align=true)
-	pvoxel_table = preprocess_daras.(voxel_table[1:ℓ]; pca_align=true)
-	pvoxel_toilet = preprocess_daras.(voxel_toilet[1:ℓ]; pca_align=true)
-end
-  ╠═╡ =#
+# ╔═╡ 4ce0ef20-8c5d-40b9-bc49-53f7cae65c4d
+md"""
+## Nearest Template and Neighbour Classification
+Use the nearest template or neighbour classification
+with respect to the chosen templates
+to classify the generated dataset.
+The normalized RCDT is applied
+with different numbers of used angles, normes, and variantes.
+"""
 
-# ╔═╡ c1647009-4591-4530-9398-5781bd9dc64f
-# ╠═╡ disabled = true
+# ╔═╡ 1242f93b-edf6-4163-8147-221cff3c9c17
+begin
+	function plot_quantiles(temp_q::AbstractArray, temp_lab::AbstractArray, data_q::AbstractArray, data_lab::AbstractArray, text)
+    dd = length(data_q[1])
+	    plt = Plots.plot(size = (500,350))
+	    color = [:blue, :red, :green, :orange, :purple, :brown]
+	    for i in 1:length(temp_lab), j in 1:length(data_lab)
+	        if data_lab[j] == temp_lab[i]
+	            Plots.plot!(plt, data_q[j], label=false, linecolor = RGBA((abs(0.5-(i-1)/(length(temp_lab)-1)))*(1-(i-1)/(length(temp_lab)-1))*0.99, ((i-1)/(length(temp_lab)-1))*(1-(i-1)/(length(temp_lab)-1))*0.99, (abs(0.5-(i-1)/(length(temp_lab)-1)))*((i-1)/(length(temp_lab)-1))*0.99, 0.5), yticks=true, xticks = (LinRange(0,dd,4), ["0", "0.25", "0.75", "1"]));
+	            # plot!(plt, data_q[j], label=false, linecolor = color[i], yticks=true, xticks = (LinRange(0,dd,4), ["0", "0.25", "0.75", "1"]));
+	        end
+	    end
+	    for i in 1:length(temp_lab)
+	        k = temp_lab[i]
+	        Plots.plot!(plt, temp_q[i], fontfamily="Computer Modern", 
+				# label=["class $k" "k"], 
+				label=text[i],
+				linewidth=2 , linecolor = RGBA((abs(0.5-(i-1)/(length(temp_lab)-1)))*(1-(i-1)/(length(temp_lab)-1))*0.99, ((i-1)/(length(temp_lab)-1))*(1-(i-1)/(length(temp_lab)-1))*0.85, (abs(0.5-(i-1)/(length(temp_lab)-1)))*((i-1)/(length(temp_lab)-1))*0.99, 1), yticks=true, xticks = (LinRange(0,dd,4), ["0", "0.25", "0.75", "1"]));    
+	        # plot!(plt, temp_q[i], legend=false, fontfamily="Computer Modern", label=["Class $k" "k"], linewidth=2 , linecolor = color[i], yticks=true, xticks = (LinRange(0,dd,4), ["0", "0.25", "0.75", "1"]));        
+	    end
+	    return plt
+	end
+
+	function accuracy_nearest_neighbour(temp_q::AbstractArray, temp_lab::AbstractArray, data_q::AbstractArray, data_lab::AbstractArray, norm::String; ret::Int64=0)
+	    pred_rcdt = zeros(length(temp_q),length(data_q))
+	    for k in 1:length(data_q), kk in 1:length(temp_q)
+	        if norm=="inf"
+	            pred_rcdt[kk,k] = maximum(abs.(temp_q[kk] .- data_q[k]))
+	        end
+	        if norm=="euclidean"
+	            pred_rcdt[kk,k] = sqrt(sum((temp_q[kk] .- data_q[k]).*(temp_q[kk] .- data_q[k])))
+	        end
+	        if norm=="manhattan"
+	            pred_rcdt[kk,k] = sum(abs.(temp_q[kk] .- data_q[k]))
+	        end
+	    end
+	    pred_label_rcdt = argmin(pred_rcdt, dims=1)
+	    label_rcdt = zeros(length(data_q))
+	    for k in 1:length(data_q)
+	        label_rcdt[k] = temp_lab[pred_label_rcdt[k][1]]
+	    end 
+	    acc_rcdt = mean(data_lab .== label_rcdt)
+	    if ret==1
+	        @info "Acc. using $(norm)-norm : \t $(acc_rcdt)"
+	    end
+	    return acc_rcdt
+	end
+
+	function argmink(a::AbstractArray, k::Int64)
+	    b = partialsortperm(a, length(a)-k+1:length(a), rev=true)
+	    # return collect(zip(b, a[b]))
+	    return collect(b[end:-1:1])
+	end
+	
+	function argmaxk(a::AbstractArray, k::Int64)
+	    b = partialsortperm(a, 1:k, rev=true)
+	    # return collect(zip(b, a[b]))
+	    return collect(b)
+	end
+	
+	function slice_matrix(A::AbstractMatrix)
+	    return [c[:] for c in eachcol(A)]
+	end
+	
+	function accuracy_k_nearest_neighbour(
+	    temp_q::AbstractArray, 
+	    temp_lab::AbstractArray, 
+	    data_q::AbstractArray, 
+	    data_lab::AbstractArray,
+	    norm::String;
+	    K::Int64=1, 
+	    ret::Int64=0)
+	
+	    temp_q = collect.(Iterators.flatten.(collect.(temp_q)))
+	    data_q = collect.(Iterators.flatten.(collect.(data_q)))
+	
+	    pred_rcdt = zeros(length(temp_q),length(data_q))
+	    for k in 1:length(data_q), kk in 1:length(temp_q)
+	        if norm=="inf"
+	            pred_rcdt[kk,k] = maximum(abs.(temp_q[kk] .- data_q[k]))
+	        end
+	        if norm=="euclidean"
+	            pred_rcdt[kk,k] = sqrt(sum((temp_q[kk] .- data_q[k]).*(temp_q[kk] .- data_q[k])))
+	        end
+	        if norm=="manhattan"
+	            pred_rcdt[kk,k] = sum(abs.(temp_q[kk] .- data_q[k]))
+	        end
+	    end
+	    # pred_label_rcdt = argmin(pred_rcdt, dims=1)
+	    K_pred_index_rcdt = argmink.(slice_matrix(pred_rcdt), K)
+	    K_pred_label_rcdt = zeros(length(K_pred_index_rcdt),K)
+	    for l in 1:K, ll in 1:length(K_pred_index_rcdt)
+	        K_pred_label_rcdt[ll,l] = temp_lab[K_pred_index_rcdt[ll][l]]
+	    end
+	    dict_K_pred_label_rcdt = countmap.(slice_matrix(transpose(Int64.(K_pred_label_rcdt))))
+	    pred_label_rcdt = findmax.(dict_K_pred_label_rcdt) 
+	    label_rcdt = zeros(length(pred_label_rcdt))
+	    for k in 1:length(data_q)
+	        label_rcdt[k] = pred_label_rcdt[k][2]
+	    end 
+	    acc_rcdt = mean(data_lab .== label_rcdt)
+	    conf_matrix = confusion_mat(data_lab, label_rcdt) 
+	    if ret==1
+	        @info "Acc. using $(norm)-norm : \t $(acc_rcdt)"
+	    end
+	    return acc_rcdt, conf_matrix
+	end
+
+	function accuracy_k_nearest_part_neighbour(
+	    part::Int64, 
+	    samp::Int64, 
+	    class_size::Int64, 
+	    class_number::Int64, 
+	    data_q::AbstractArray, 
+	    data_lab::AbstractArray, 
+	    norm::String; 
+	    K::Int64=1,
+	    ret::Int64=0)
+	
+	    # variabel cross <-- TO DO
+	
+	    if samp > class_size
+	        return "Error : unexpected devision of classes."
+	    end
+	    if ret==1
+	        conf_matrix = zeros(length(unique(data_lab)), length(unique(data_lab)))
+	    end
+	
+	    acc_rcdt = zeros(part)
+	    size_data = length(data_lab)
+	    
+	    for i in 1:part
+	        split_range = []
+	        for l in 1:class_number
+	            choice = collect(1+(l-1)*class_size:l*class_size)
+	            shuffle!(choice)
+	            append!(split_range, choice[1:samp])
+	        end
+
+			train_data_q = data_q[split_range]
+	        train_labels = data_lab[split_range]
+	
+	        test_range = Array(1:size_data)
+	        test_range = filter(e->!(e in split_range),test_range)
+	
+	        test_data_q = data_q[test_range]
+	        test_labels = data_lab[test_range]
+	
+	        acc_rcdt[i], conf_matrix_part = accuracy_k_nearest_neighbour(train_data_q, train_labels, test_data_q, test_labels, norm, K=K)
+	        # acc_rcdt[i] = accuracy_k_nearest_neighbour(train_data_q, train_labels, test_data_q, test_labels, norm, K=K)
+	        if ret==1
+	            conf_matrix += conf_matrix_part 
+	        end
+	    end
+	    @info "Acc. using $(norm)-norm : \t $(mean(acc_rcdt)) +/- $(std(acc_rcdt))"
+	    if ret==1
+	        return conf_matrix
+	    end
+	end
+
+	function confusion_mat(true_labels::AbstractArray, predicted_labels::AbstractArray)
+	    # Get the sorted unique labels from both true and predicted labels
+	    labels = sort(unique(vcat(true_labels, predicted_labels)))
+	    n_labels = length(labels)
+	    
+	    # Create a mapping from label to index
+	    label_to_index = Dict(label => idx for (idx, label) in enumerate(labels))
+	    
+	    # Initialize the confusion matrix as an integer matrix
+	    matrix = zeros(Int, n_labels, n_labels)
+	    
+	    # Fill in the confusion matrix
+	    for (t, p) in zip(true_labels, predicted_labels)
+	        i = label_to_index[t]
+	        j = label_to_index[p]
+	        matrix[i, j] += 1
+	    end
+	    
+	    return matrix
+	end
+end
+
+# ╔═╡ e06795a0-e9de-4bd4-a8da-6585348126eb
 #=╠═╡
 begin
-	ℓ=10
-	pvoxel_bathtub = daras_preprocess_volume.(voxel_bathtub[1:ℓ])
-	pvoxel_bed = daras_preprocess_volume.(voxel_bed[1:ℓ])
-	pvoxel_chair = daras_preprocess_volume.(voxel_chair[1:ℓ])
-	pvoxel_desk = daras_preprocess_volume.(voxel_desk[1:ℓ])
-	pvoxel_dresser = daras_preprocess_volume.(voxel_dresser[1:ℓ])
-	pvoxel_monitor = daras_preprocess_volume.(voxel_monitor[1:ℓ])
-	pvoxel_night_stand = daras_preprocess_volume.(voxel_night_stand[1:ℓ])
-	pvoxel_sofa = daras_preprocess_volume.(voxel_sofa[1:ℓ])
-	pvoxel_table = daras_preprocess_volume.(voxel_table[1:ℓ])
-	pvoxel_toilet = daras_preprocess_volume.(voxel_toilet[1:ℓ])
+	K = 5
+	CC₁ = accuracy_k_nearest_part_neighbour(20, K, 10, 10, evoxel, Labels, "manhattan", K=1, ret=1)
+	CC₂ = accuracy_k_nearest_part_neighbour(20, K, 10, 10, evoxel, Labels, "euclidean", K=1, ret=1)
+	CC∞ = accuracy_k_nearest_part_neighbour(20, K, 10, 10, evoxel, Labels, "inf", K=1, ret=1)
 end
   ╠═╡ =#
 
 # ╔═╡ Cell order:
 # ╠═8cbe0300-edff-11ef-2fad-d3b8cca171a9
-# ╠═6c52eb49-2114-49b0-86ab-52e6079bbfbb
+# ╟─80b0dd3a-69ae-48df-abac-c8de5625fe2e
 # ╠═7a209b02-782f-4b79-a4b4-d89029206c23
 # ╠═0791c621-08c5-4772-bbcb-906957a721be
 # ╠═b67c6b62-8cec-4f62-8709-07ddc17354d3
 # ╠═dde2b58d-f858-4201-8fa8-94165d256b66
-# ╠═1dbe005e-b755-402e-bfaf-bc54f727901b
-# ╠═61f804c7-0c29-4ebd-a101-51cd5b032d79
-# ╠═e5f176c0-32c6-4879-98e4-15904cccd8ee
-# ╠═6fddb07c-351d-4beb-9e08-0e0400c4c237
-# ╠═f5b1c427-65d7-4768-b687-89f73facf5ce
+# ╟─1c634e17-e792-47ec-bab8-2bcdb342bed7
+# ╠═010cf880-a1c8-49f2-bad2-80fcfecbc7ce
+# ╠═c86866df-5730-4f2a-86d0-88e4b9bdba1a
+# ╠═06c66cd3-1324-4592-930e-73587ec0c5b6
+# ╟─7cd2d106-cbe1-4ef6-8efc-a3340d059793
+# ╠═7b8ca11e-b3a8-4455-8811-c74097d2d50f
+# ╠═5f8ec9ae-d81c-4335-85de-f15048d9bbcf
+# ╠═41f9d8c0-5cb5-4068-b253-033147dd3449
+# ╠═05c285a0-328a-48f4-bb43-888f4d180339
+# ╠═03fc0177-5d3d-4ff0-abe9-3ba7c9e11740
+# ╟─5999b3b7-7a53-40a2-b8df-1e05887e91ac
+# ╠═a6d430f2-1f9b-4b44-9e22-2e064849aa12
+# ╟─a91c4339-41f2-469c-9e55-50c1732906ec
 # ╠═4d629451-66b7-44a9-8693-9f48d5f324a3
 # ╠═a2d9776f-3e8a-428f-af93-dd16ff86ad75
-# ╠═c1647009-4591-4530-9398-5781bd9dc64f
 # ╠═13832bcd-831f-445a-bb50-fab64300211f
 # ╠═35949af4-e037-4e68-9e54-4cfc3a8c7316
 # ╠═47b98719-a983-4480-ab09-23676f8ee9da
 # ╠═837b8fa2-b7e8-4850-a513-69c03d35a45b
-# ╠═ef458df7-1a1e-4b1f-8f0e-9cff78c15026
+# ╠═3daa2232-071d-493c-aa58-f1b8d0cef86a
+# ╟─a75c6ac8-86a0-479d-aa87-e5bde563d22b
 # ╠═aff5fbc3-2724-45fd-802b-3b60e509a999
 # ╠═107302bd-01ad-4787-aa96-61d6e93b08b7
-# ╠═6db2d381-c783-408d-bd16-b27b366647db
 # ╠═96ae91b4-fafd-47e5-b2a9-e19f61b21f84
-# ╠═36de3800-4f60-4993-814d-b23a6998fc36
 # ╠═cbfc4e51-031f-46f3-92fc-32f3335ef22d
-# ╠═b0570c95-a32c-405d-8c7e-81753cd65ff4
-# ╠═12c6d50a-2717-4e69-a0d3-772abc972bab
-# ╠═a5ef78da-e311-4c3c-9daa-9566bead7059
+# ╠═baa5029f-428f-4e48-8c6a-c31b643fa5cf
 # ╠═2d6b3f00-18f6-4500-820f-2c931ddb7dd1
-# ╠═4016ba47-2b6e-4874-b9ac-e8ae2dc34d97
+# ╟─da9fbc60-77eb-4952-acb5-7bba2e1fa045
 # ╠═88a06a44-b384-4e41-a3cf-b90130521749
 # ╠═b8bd9a31-6571-48ee-a345-33f247aa9e55
 # ╠═b5b4ae57-a437-4c40-8983-252ae845abf7
@@ -1156,18 +1147,9 @@ end
 # ╠═4dcacaf4-7ffe-4dae-ab51-95351481f968
 # ╠═d94c8928-8fc6-4605-802c-d5998881c1f9
 # ╠═3f5714c9-b4fc-464e-8caf-8008b4bbf593
-# ╠═315af15c-3de3-4e36-b0ab-d558b9d175b7
 # ╠═995cb023-6400-46e3-a691-4680f745a632
 # ╠═1a7082c4-bfcf-40cc-9263-7b5bc71f9156
-# ╠═b6a5c24e-bc62-44e2-b1a8-9ef5782be851
-# ╠═fce37cd1-db8c-46d1-92ee-3edfde070a7f
-# ╠═6b5108cf-f9cc-4925-b64e-b18f099d6896
-# ╠═e12baad1-e10c-4ca5-a475-8f2497fe7dd8
-# ╠═f0115f0b-6098-4dd8-bc89-986200517a0d
-# ╠═c91fb98e-a4dc-4ed3-9714-98f53e309114
-# ╠═dea83ba3-1f0a-4108-8bed-5c96cca74415
-# ╠═1b62e877-3f34-42ca-8e3f-65946597ee63
-# ╠═17564f50-2463-4625-af9f-efd2523dece4
+# ╟─37567a53-6a72-4d9f-996f-98e31af48feb
 # ╠═4045055c-7a1e-488f-a528-6a9f62f450b7
 # ╠═39bbfac0-7969-4c85-81d0-2e2100c54312
 # ╠═708524ca-e335-4214-a32f-161b777a210f
@@ -1177,3 +1159,7 @@ end
 # ╠═213c7f64-bd0e-4485-aed0-f36d2a398f66
 # ╠═4284e5b2-552b-4da7-9138-f88bdd4f4413
 # ╠═6631451f-2729-49c2-92f3-e4aa83ab5462
+# ╟─4ce0ef20-8c5d-40b9-bc49-53f7cae65c4d
+# ╠═e3fbd24c-7e4d-4841-b028-53fda048ac00
+# ╠═1242f93b-edf6-4163-8147-221cff3c9c17
+# ╠═e06795a0-e9de-4bd4-a8da-6585348126eb
