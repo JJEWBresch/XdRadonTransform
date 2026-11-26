@@ -22,6 +22,7 @@ include("TestImages.jl")
 include("DataTransformations.jl")
 
 include("RadonTransform.jl")
+include("RadonTransformFast.jl")   # R(P), Rθ(P) (fast; R(P; legacy=true): original), backproject
 include("JohnTransform.jl")
 
 end # module XdRadonTransform

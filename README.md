@@ -3,8 +3,8 @@
 This repository contains the code and experiments for the papers:
 
 1. Robert Beinert, Jonas Bresch, Michael Quellmalz
-   '[A Discrete Radon Transform Based on the Area of Cube-Plane Intersection](https://doi.org/10.1007/978-3-031-92366-1_19)',
-   arxiv:xxxx.xxxxx,
+   'A Discrete Radon Transform Based on the Area of Cube-Plane Intersection',
+   arXiv:2603.13503,
    2026.
 
 Please cite the papers if you use the code.
@@ -21,12 +21,26 @@ Pkg.activate(".")
 Pkg.instantiate()
 ```
 
+## Radon transform
+
+```julia
+using XdRadonTransform
+P = scale(Phantom(image))                    # voxel image, scaled into the unit ball
+R = RadonTransform(uniform_radii(363), uniform_circle(256); width = 0.0)
+S = R(P)                                     # Sinogram (radii × angles), S.data
+```
+
+Legacy implementation is available with `R(P; legacy = true)`. 
+The computation runs in the precision of the phantom: `Float64` by default,
+`Float32` with `Phantom{Float32}(image)`. With `using CUDA`, phantoms with `CuArray` data are
+transformed on the GPU (2D and 3D).
+
 ## Examples
 
 The basic usage of the code is shown
 in the following Pluto notebooks:
 
-- `Pluto/iterface.jl`:
+- `pluto/interface.jl`:
   Simple example for setting the Radon transform. 
   Example usage on a simple object.
 
@@ -49,8 +63,8 @@ using the following Pluto notebooks:
   This experiment corresponds to
   Table 2 and 3 and Figure 6.
 - `IEEE/Tab3_4_shape_recognition_nonaff.jl`:
-  Nearest neighbour classification for for ModelNet10 dataset
-  using the closed formula of the Radon transform for object recognition vi mNR-CDT (Beckmann et al.).
+  Nearest neighbour classification for ModelNet10 dataset
+  using the closed formula of the Radon transform for object recognition via mNR-CDT (Beckmann et al.).
   This experiment corresponds to
   Table 4 and 5 and Figure 7.
 - `IEEE/SecIII.E_shape_matching_aff.jl`:
@@ -61,7 +75,7 @@ using the following Pluto notebooks:
   Best fitting histograms for 2D.
   This experiment corresponds to
   Figure 8 and 9 (top).
-- `IEEE/Fig8_9_clustering_3d_sliced_wasserstein.jl`:
+- `IEEE/Fig9_clustering_3d_sliced_wasserstein.jl`:
   Best fitting histograms for 3D.
   This experiment corresponds to
   Figure 9 (bottom).

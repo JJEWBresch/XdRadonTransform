@@ -17,7 +17,7 @@ begin
 end
 
 # ╔═╡ c20ec051-9ae9-40f7-97cb-7abf2baf4fe4
-using FileIO, MeshIO, GLMakie, Flux3D, PlotlyJS # CairoMakie, Flux3D
+using FileIO, MeshIO, GLMakie, PlotlyJS # CairoMakie, Flux3D
 
 # ╔═╡ 1fa304a4-ecf5-4645-8f3a-90aedde4323e
 using Markdown, InteractiveUtils

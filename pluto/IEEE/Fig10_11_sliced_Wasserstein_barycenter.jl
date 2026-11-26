@@ -7,7 +7,7 @@ using InteractiveUtils
 # ╔═╡ 8cbe0300-edff-11ef-2fad-d3b8cca171a9
 begin
 	import Pkg
-	Pkg.activate("..")  
+	Pkg.activate("../..")  
 	using Revise
 	using XdRadonTransform
 	using XdRadonTransform.DataTransformations

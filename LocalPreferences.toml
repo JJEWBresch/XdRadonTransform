@@ -1,0 +1,6 @@
+# GLMakie 0.10 (held back by Augmentor via Interpolations/ImageTransformations → Makie 0.21) fails
+# to precompile on Julia ≥ 1.12: its precompile workload loads an image through FileIO/ImageIO, which
+# newer Julia versions no longer allow during precompilation. Skipping the workload avoids this;
+# GLMakie then compiles a bit more on its first plot. Can be removed once GLMakie can be updated.
+[GLMakie]
+precompile_workload = false

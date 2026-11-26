@@ -18,7 +18,7 @@ begin
 end
 
 # ╔═╡ c20ec051-9ae9-40f7-97cb-7abf2baf4fe4
-using FileIO, MeshIO, GLMakie, Flux3D, PlotlyJS # CairoMakie, Flux3D
+using FileIO, MeshIO, GLMakie, PlotlyJS # CairoMakie, Flux3D
 
 # ╔═╡ 1fa304a4-ecf5-4645-8f3a-90aedde4323e
 using Markdown, InteractiveUtils
@@ -753,6 +753,8 @@ Plots.savefig(pq14, "a_quantiles_1_3_5_256_256.pdf")
   ╠═╡ =#
 
 # ╔═╡ dbad2a0d-ac54-4d35-90bc-48613b7bd130
+# ╠═╡ disabled = true
+#=╠═╡
 begin
 	function aargmin(D)
 		l = []
@@ -771,22 +773,29 @@ begin
 	ada₂ = aargmin(DA₂)
 	ada∞ = aargmin(DA∞)
 end
+  ╠═╡ =#
 
 # ╔═╡ d6e844b8-6cdb-4888-a4af-f4ece20a7c48
+# ╠═╡ disabled = true
+#=╠═╡
 begin
 	Plots.plot(Labels, labels="True Labeling", fontfamily="Computer Modern")
 	Plots.plot!(adm₁, labels="1-Norm", fontfamily="Computer Modern")
 	Plots.plot!(adm₂, labels="2-Norm", fontfamily="Computer Modern")
 	ppm = Plots.plot!(adm∞, labels="∞-Norm", fontfamily="Computer Modern")
 end
+  ╠═╡ =#
 
 # ╔═╡ c77c2478-73fd-47a9-a0a1-713e534ec712
+# ╠═╡ disabled = true
+#=╠═╡
 begin
 	Plots.plot(Labels, labels="True Labeling", fontfamily="Computer Modern")
 	Plots.plot!(ada₁, labels="1-Norm", fontfamily="Computer Modern")
 	Plots.plot!(ada₂, labels="2-Norm", fontfamily="Computer Modern")
 	ppa = Plots.plot!(ada∞, labels="∞-Norm", fontfamily="Computer Modern")
 end
+  ╠═╡ =#
 
 # ╔═╡ 23c841ef-d77b-4f38-81be-2fdb22c784db
 # ╠═╡ disabled = true

@@ -2,8 +2,6 @@ using Base.Threads
 using LinearAlgebra
 
 
-using Zygote
-using Flux
 using Statistics
 
 struct RadonTransform
@@ -16,7 +14,7 @@ struct RadonTransform
     reduction_threshold::Float64
 end
 
-function RadonTransform(radii::Vector{Float64}, angles::Matrix{Float64}; width::Float64=0.0, reduction_threshold::Float64=1e-15)
+function RadonTransform(radii::AbstractVector{<:Real}, angles::AbstractMatrix{<:Real}; width::Real=0.0, reduction_threshold::Real=1e-15)
     num_radii = length(radii)
     (num_angles, dim) = size(angles)
     return RadonTransform(radii, num_radii, angles, num_angles, dim, width, reduction_threshold)
@@ -31,7 +29,7 @@ struct RestrictedRadonTransform
     reduction_threshold::Float64
 end
 
-function RestrictedRadonTransform(radii::Vector{Float64}, angle::Vector{Float64}; width::Float64=0.0, reduction_threshold::Float64=1e-15)
+function RestrictedRadonTransform(radii::AbstractVector{<:Real}, angle::AbstractVector{<:Real}; width::Real=0.0, reduction_threshold::Real=1e-15)
     num_radii = length(radii)
     dim = length(angle)
     return RestrictedRadonTransform(radii, num_radii, angle, dim, width, reduction_threshold)
@@ -45,7 +43,7 @@ struct RadonTransformRay
     dim::Int64
 end
 
-function RadonTransformRay(radii::Vector{Float64}, angles::Matrix{Float64})
+function RadonTransformRay(radii::AbstractVector{<:Real}, angles::AbstractMatrix{<:Real})
     num_radii = length(radii)
     (num_angles, dim) = size(angles)
     return RadonTransformRay(radii, num_radii, angles, num_angles, dim)
@@ -58,31 +56,53 @@ struct RestrictedRadonTransformRay
     dim::Int64
 end
 
-function RestrictedRadonTransformRay(radii::Vector{Float64}, angle::Vector{Float64})
+function RestrictedRadonTransformRay(radii::AbstractVector{<:Real}, angle::AbstractVector{<:Real})
     num_radii = length(radii)
     dim = length(angle)
     return RestrictedRadonTransformRay(radii, num_radii, angle, dim)
 end
 
-struct Phantom
-    data::Array{Float64}
-    hypervoxel_size::Vector{Float64}
+# Data in Float64 (as before) or, with Phantom{Float32}(...), in Float32: the precision of the fast
+# transform. Stored in a dense array (Array, or a GPU array for the CUDA extension).
+struct Phantom{T<:Union{Float32,Float64},A<:AbstractArray{T}}
+    data::A
+    hypervoxel_size::Vector{T}
+    function Phantom{T}(data::AbstractArray, hypervoxel_size) where {T<:Union{Float32,Float64}}
+        d = data isa DenseArray{T} ? data : _dense(T.(data))
+        length(hypervoxel_size) == ndims(d) || throw(DimensionMismatch("need one voxel size per dimension"))
+        return new{T,typeof(d)}(d, hypervoxel_size isa Vector{T} ? hypervoxel_size : collect(T, hypervoxel_size))
+    end
 end
+_dense(x::DenseArray) = x
+_dense(x::AbstractArray) = Array(x)     # e.g. an OffsetArray
 
+Phantom(data::AbstractArray, hypervoxel_size) = Phantom{Float64}(data, hypervoxel_size)
+
+# a copy of the image
+Phantom{T}(image::AbstractArray) where {T<:Union{Float32,Float64}} = Phantom{T}(T.(image), ones(ndims(image)))
 function Phantom(image::AbstractArray)
     return Phantom(Float64.(image), ones(ndims(image)))
 end
 
-function scale(P::Phantom)
+function scale(P::Phantom{T}) where {T}
     s = norm(P.hypervoxel_size .* size(P.data))
-    return Phantom(P.data, 2.0 ./ s .* P.hypervoxel_size)
+    return Phantom{T}(P.data, 2.0 ./ s .* P.hypervoxel_size)
 end
 
-struct Sinogram
-    data::Matrix{Float64}
+# Float32 or Float64 data, in the precision of the phantom
+struct Sinogram{T<:Union{Float32,Float64},A<:AbstractMatrix{T}}
+    data::A
     radii::Vector{Float64}
     angles::Matrix{Float64}
+    function Sinogram(data::AbstractMatrix, radii, angles)
+        d = _sinogram_data(data)
+        return new{eltype(d),typeof(d)}(d, radii, angles)
+    end
 end
+
+_sinogram_data(x::DenseMatrix{<:Union{Float32,Float64}}) = x
+_sinogram_data(x::AbstractMatrix{<:Union{Float32,Float64}}) = Matrix(x)
+_sinogram_data(x::AbstractMatrix) = Matrix{Float64}(x)
 
 struct Hypervoxel
     center::Vector{Float64}
@@ -110,7 +130,7 @@ struct PlaneRadonKernel
     prefactor::Float64
 end
 
-function PlaneRadonKernel(Rθ::RestrictedRadonTransform, hypervoxel_size::Vector{Float64})
+function PlaneRadonKernel(Rθ::RestrictedRadonTransform, hypervoxel_size::AbstractVector{<:Real})
     a = hypervoxel_size ./ 2.0
     aθ = reduce(a .* Rθ.angle, ϵ=Rθ.reduction_threshold)
     ℓ = length(aθ)
@@ -138,7 +158,7 @@ struct SlabRadonKernel
     width::Float64
 end
 
-function SlabRadonKernel(Rθ::RestrictedRadonTransform, hypervoxel_size::Vector{Float64})
+function SlabRadonKernel(Rθ::RestrictedRadonTransform, hypervoxel_size::AbstractVector{<:Real})
     a = hypervoxel_size ./ 2.0
     aθ = reduce(a .* Rθ.angle, ϵ=Rθ.reduction_threshold)
     ℓ = length(aθ)
@@ -162,7 +182,7 @@ function (A::SlabRadonKernel)(t::Float64)
     return A.prefactor * Aa
 end
 
-function select_Radon_kernel(Rθ::RestrictedRadonTransform, hypervoxel_size::Vector{Float64})
+function select_Radon_kernel(Rθ::RestrictedRadonTransform, hypervoxel_size::AbstractVector{<:Real})
     if Rθ.width == 0.0
         return PlaneRadonKernel(Rθ, hypervoxel_size)
     else
@@ -227,16 +247,30 @@ end
 # end
 
 
-function (R::RadonTransform)(P::Phantom)
+# R(P) and Rθ(P) use the fast implementation (`radon`, RadonTransformFast.jl) in the precision of
+# P; with `legacy=true` the original implementation below (in Float64; error for unsorted radii).
+function (R::RadonTransform)(P::Phantom; legacy::Bool=false)
+    legacy && return radon_legacy(R, P)
+    return Sinogram(radon(P, R), R.radii, R.angles)
+end
+
+function (Rθ::RestrictedRadonTransform)(P::Phantom; legacy::Bool=false)
+    legacy && return radon_legacy(Rθ, P)
+    return radon(P, Rθ)
+end
+
+function radon_legacy(R::RadonTransform, P::Phantom)
+    issorted(R.radii) || throw(ArgumentError("legacy = true needs sorted radii"))
     S = zeros(Float64,  R.num_radii, R.num_angles)
     @threads for ℓ in 1:R.num_angles
         Rθ = RestrictedRadonTransform(R.radii, R.angles[ℓ, :], width=R.width, reduction_threshold=R.reduction_threshold)
-        S[:, ℓ] = Rθ(P)
+        S[:, ℓ] = radon_legacy(Rθ, P)
     end
     return Sinogram(S, R.radii, R.angles)
 end
 
-function (Rθ::RestrictedRadonTransform)(P::Phantom)
+function radon_legacy(Rθ::RestrictedRadonTransform, P::Phantom)
+    issorted(Rθ.radii) || throw(ArgumentError("legacy = true needs sorted radii"))
     S = zeros(Float64, Rθ.num_radii)
     A = select_Radon_kernel(Rθ, P.hypervoxel_size)
     for j in CartesianIndices(P.data)
@@ -281,7 +315,7 @@ end
 
 const It = Base.Iterators
 
-function interpolate_d(data::Array{Float64, D}, hypervoxel_size::Vector{Float64}, pos::Vector{Float64}) where D
+function interpolate_d(data::AbstractArray{<:Real, D}, hypervoxel_size::AbstractVector{<:Real}, pos::AbstractVector{<:Real}) where D
     dims = size(data)
     idx = (pos ./ hypervoxel_size) .+ (Float64.(dims) .+ 1.0) ./ 2.0
     
