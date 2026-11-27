@@ -33,7 +33,7 @@ S = R(P)                                     # Sinogram (radii × angles), S.dat
 Legacy implementation is available with `R(P; legacy = true)`. 
 The computation runs in the precision of the phantom: `Float64` by default,
 `Float32` with `Phantom{Float32}(image)`. With `using CUDA`, phantoms with `CuArray` data are
-transformed on the GPU (2D and 3D).
+transformed on the GPU.
 
 ## Examples
 

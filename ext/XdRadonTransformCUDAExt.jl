@@ -1,7 +1,7 @@
-# CUDA version of `radon` (and so `R(P)`, `Rθ(P)`) and `backproject` for 2D and 3D phantoms whose
-# data is a `CuArray` (prototype), loaded only after `using CUDA`. Same model and kernels as the CPU
-# code (`CubeKernel` is isbits and its evaluation is branch free), computed in the precision of the
-# data.
+# CUDA version of `radon` (and so `R(P)`, `Rθ(P)`) and `backproject` for phantoms of any dimension
+# whose data is a `CuArray` (prototype), loaded only after `using CUDA`. Same model and kernels as the
+# CPU code (`CubeKernel`, `GenericCubeKernel` are isbits; the closed forms are branch free), computed
+# in the precision of the data.
 #
 # Forward: one thread per (radius, direction), gather, no atomics. The thread loops over the voxel
 # rows along the dominant axis c of the direction (largest |h_c θ_c|), in which only the
@@ -15,20 +15,19 @@ using XdRadonTransform: Phantom, RadonTransform, CubeKernel, cube_kernel, suppor
     radii_index, EquispacedRadii, _radii_perm
 using CUDA
 
-struct DirInfo{N,D,T}
-    K::CubeKernel{N,T}
+struct DirInfo{D,T,KT}
+    K::KT             # CubeKernel or GenericCubeKernel (both isbits)
     θ::NTuple{D,T}
     ℓ::Int32
     c::Int32          # dominant axis
 end
 
-function _groups(angles, h::NTuple{D,T}, width, thr) where {D,T}
+function _groups(angles, h::NTuple{D,T}, width, thr, generic) where {D,T}
     a = map(x -> x / 2, h)
     groups = Dict{Int,Vector{Any}}()
     for ℓ in axes(angles, 1)
         θ = _direction(angles, ℓ, Val(D))
-        K = cube_kernel(a, θ; width, threshold = thr)
-        K isa CubeKernel || throw(ArgumentError("GPU: only kernels with ≤ 4 boxes"))
+        K = cube_kernel(a, θ; width, threshold = thr, generic)
         c = argmax(map((hi, θi) -> abs(hi * θi), h, θ))
         push!(get!(groups, length(K.b), Any[]), DirInfo(K, θ, Int32(ℓ), Int32(c)))
     end
@@ -124,19 +123,60 @@ function _radon3d!(S, f, radii, infos, h::NTuple{3,T}) where {T}
     return nothing
 end
 
+# any dimension: as above, the voxel lines along the dominant axis c are enumerated by the
+# CartesianIndices of the other axes
+function _radonNd!(S, f, radii, infos, h::NTuple{D,T}) where {D,T}
+    k = (blockIdx().x - Int32(1)) * blockDim().x + threadIdx().x
+    g = (blockIdx().y - Int32(1)) * blockDim().y + threadIdx().y
+    (k <= length(radii) && g <= length(infos)) || return nothing
+    @inbounds begin
+        info = infos[g]
+        K, θ = info.K, info.θ
+        r = radii[k]
+        Sup = support(K)
+        n = size(f)
+        c = Int(info.c)
+        nc, hc, θc = n[c], h[c], θ[c]
+        stride = 1                                  # linear index step along the axis c
+        for d in 1:c-1
+            stride *= n[d]
+        end
+        acc = zero(T)
+        for I in CartesianIndices(ntuple(d -> d == c ? 1 : n[d], Val(D)))
+            q = zero(T)
+            lin = 1
+            st = 1
+            for d in 1:D
+                if d != c
+                    q += _pr(I[d], n[d], h[d], θ[d])
+                    lin += (I[d] - 1) * st
+                end
+                st *= n[d]
+            end
+            jlo, jhi = _jrange(r, q, Sup, nc, hc, θc)
+            for j in jlo:jhi
+                acc += f[lin + (j - 1) * stride] * K(q + _pr(j, nc, hc, θc) - r)
+            end
+        end
+        S[k, info.ℓ] = acc
+    end
+    return nothing
+end
+
 # `radon(P, R)` (and `R(P)`, `Rθ(P)`) calls `_radon(P.data, voxel size, R)`
-function XdRadonTransform._radon(f::CuArray{T,D}, h::NTuple{D,T}, R::RadonTransform) where {T,D}
-    D in (2, 3) || throw(ArgumentError("GPU: 2D and 3D only"))
+function XdRadonTransform._radon(f::CuArray{T,D}, h::NTuple{D,T}, R::RadonTransform; generic::Bool = false) where {T,D}
     radii, angles, width, thr = _geometry(R, T, D)
     S = CUDA.zeros(T, length(radii), size(angles, 1))
     rd = CuArray(radii)
-    for infos in _groups(angles, h, width, thr)
+    for infos in _groups(angles, h, width, thr, generic)
         threads = (64, 4)
         blocks = (cld(length(radii), threads[1]), cld(length(infos), threads[2]))
         if D == 2
             @cuda threads = threads blocks = blocks _radon2d!(S, f, rd, infos, h)
-        else
+        elseif D == 3
             @cuda threads = threads blocks = blocks _radon3d!(S, f, rd, infos, h)
+        else
+            @cuda threads = threads blocks = blocks _radonNd!(S, f, rd, infos, h)
         end
     end
     perm = _radii_perm(R)
@@ -173,8 +213,8 @@ function _backproject!(out, g, radii, infos, h::NTuple{D,T}, r1::T, invΔ::T) wh
     return nothing
 end
 
-function XdRadonTransform.backproject(R::RadonTransform, g::CuArray{T,2}, n::NTuple{D,Int}, hypervoxel_size) where {T<:AbstractFloat,D}
-    D in (2, 3) || throw(ArgumentError("GPU: 2D and 3D only"))
+function XdRadonTransform.backproject(R::RadonTransform, g::CuArray{T,2}, n::NTuple{D,Int}, hypervoxel_size;
+                                      generic::Bool = false) where {T<:AbstractFloat,D}
     radii, angles, width, thr = _geometry(R, T, D)
     ri = radii_index(radii)
     ri isa EquispacedRadii || throw(ArgumentError("GPU adjoint: equispaced radii only"))
@@ -183,7 +223,7 @@ function XdRadonTransform.backproject(R::RadonTransform, g::CuArray{T,2}, n::NTu
     h = ntuple(i -> T(hypervoxel_size[i]), D)
     out = CUDA.zeros(T, n)
     rd = CuArray(radii)
-    for infos in _groups(angles, h, width, thr)
+    for infos in _groups(angles, h, width, thr, generic)
         @cuda threads = 256 blocks = cld(length(out), 256) _backproject!(out, g, rd, infos, h, ri.r1, ri.invΔ)
     end
     return out

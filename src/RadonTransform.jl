@@ -248,15 +248,18 @@ end
 
 
 # R(P) and Rθ(P) use the fast implementation (`radon`, RadonTransformFast.jl) in the precision of
-# P; with `legacy=true` the original implementation below (in Float64; error for unsorted radii).
-function (R::RadonTransform)(P::Phantom; legacy::Bool=false)
+# P; with `legacy=true` the original implementation below (in Float64; error for unsorted radii);
+# with `generic=true` the fast implementation with the general kernel recursion for all directions.
+function (R::RadonTransform)(P::Phantom; legacy::Bool=false, generic::Bool=false)
+    legacy && generic && throw(ArgumentError("legacy and generic cannot both be true"))
     legacy && return radon_legacy(R, P)
-    return Sinogram(radon(P, R), R.radii, R.angles)
+    return Sinogram(radon(P, R; generic), R.radii, R.angles)
 end
 
-function (Rθ::RestrictedRadonTransform)(P::Phantom; legacy::Bool=false)
+function (Rθ::RestrictedRadonTransform)(P::Phantom; legacy::Bool=false, generic::Bool=false)
+    legacy && generic && throw(ArgumentError("legacy and generic cannot both be true"))
     legacy && return radon_legacy(Rθ, P)
-    return radon(P, Rθ)
+    return radon(P, Rθ; generic)
 end
 
 function radon_legacy(R::RadonTransform, P::Phantom)

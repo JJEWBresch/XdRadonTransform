@@ -28,10 +28,12 @@
 #
 #     f_N(t) = (G_{N-1}(t + b_N) - G_{N-1}(t - b_N)) / (2b_N),     G_{N-1}(s) = ∫_0^s f_{N-1},
 #
-# with closed forms for G_1, G_2 (piecewise linear/quadratic) and G_3 via the antiderivative K_2 of
-# G_2. Every division is by the largest half-width of the boxes involved, so the relative error stays
-# O(eps). N ≤ 4 covers the plane and the slab in 2D and 3D; larger N uses the recursion
-# `generic_density` (the same idea with closed-form tails, any dimension).
+# with closed forms for G_1, G_2 (piecewise linear/quadratic), G_3 via the antiderivative K_2 of G_2
+# and G_4 via the antiderivatives K_2, L_2 of G_2. Every division is by the largest half-width of the
+# boxes involved, so the relative error stays O(eps). N ≤ 5 (the plane and the slab in 2D, 3D and
+# 4D) is written out; larger N uses the same closed forms generated per N (`GeneratedCubeKernel`).
+# `generic = true` uses the recursion `generic_density` (the same idea down to single boxes, with
+# branches) for all N.
 
 """
     CubeKernel{N,T}
@@ -40,7 +42,7 @@ Radon transform `A(t)` of a voxel for one direction: `scale` times the density o
 independent uniform random variables on `[-b_i, b_i]`, `0 < b_1 ≤ … ≤ b_N` (the convolution of
 `N` normalized boxes). Evaluate with `K(t)`.
 
-Built by [`cube_kernel`](@ref). `N ≤ 4` uses closed forms; for `N ≥ 5` see `generic_density`.
+Built by [`cube_kernel`](@ref). For `N ≥ 6` see [`GeneratedCubeKernel`](@ref), for `generic = true` `generic_density`.
 """
 struct CubeKernel{N,T<:AbstractFloat}
     b::NTuple{N,T}      # sorted half-widths, all > 0
@@ -50,14 +52,16 @@ struct CubeKernel{N,T<:AbstractFloat}
 end
 
 """
-    cube_kernel(halfsize, θ; width=0, threshold=1e-15) -> CubeKernel
+    cube_kernel(halfsize, θ; width=0, threshold=1e-15, generic=false) -> CubeKernel
 
 Kernel `t ↦ A_θ^a(t)` (paper, Thm. 1) of the voxel `(-a, a]`, `a = halfsize`, for the direction `θ`,
 or for `width > 0` its average over the slab `[t - width/2, t + width/2]` (Cor. 6 divided by the
 width). Components with `|a_i θ_i| ≤ threshold` are treated as zero (as `reduce` in the original
-code), and also those below `eps(T)` times the largest one.
+code), and also those below `eps(T)` times the largest one. `generic = true`: always the recursion
+([`GenericCubeKernel`](@ref)), also for ≤ 5 boxes (for comparisons; slower, same values to rounding).
 """
-function cube_kernel(a::NTuple{D,T}, θ::NTuple{D,T}; width::T = zero(T), threshold::T = T(1e-15)) where {D,T<:AbstractFloat}
+function cube_kernel(a::NTuple{D,T}, θ::NTuple{D,T}; width::T = zero(T), threshold::T = T(1e-15),
+                     generic::Bool = false) where {D,T<:AbstractFloat}
     scale = prod(2 .* a)
     bs = map((ai, θi) -> abs(ai * θi), a, θ)
     bmax = max(maximum(bs), width / 2)
@@ -68,7 +72,8 @@ function cube_kernel(a::NTuple{D,T}, θ::NTuple{D,T}; width::T = zero(T), thresh
     sort!(v)
     N = length(v)
     N == 0 && throw(ArgumentError("direction θ = $θ is zero"))
-    return _make_kernel(Val(N), Tuple(v)::NTuple{N,T}, scale)
+    b = Tuple(v)::NTuple{N,T}
+    return generic ? GenericCubeKernel(b, scale) : _make_kernel(Val(N), b, scale)
 end
 cube_kernel(a::NTuple{D,<:Real}, θ::NTuple{D,<:Real}; kwargs...) where {D} =
     cube_kernel(float.(a), float.(θ); kwargs...)
@@ -94,8 +99,14 @@ function _make_kernel(::Val{N}, b::NTuple{N,T}, scale::T) where {N,T}
         # K2 constants, G3 = (K2(s+b3) - K2(s-b3))/(2b3), outer difference over b4
         c = (b2 - b1, b1 + b2, 1 / (4b2), b2 / 4 + b1^2 / (12b2), 1 / (24 * b1 * b2),
              b3, 1 / (2b3), b1 + b2 + b3, b4, scale / (2b4))
+    elseif N == 5
+        b1, b2, b3, b4, b5 = b
+        # L2 constants, K3 = (L2(s+b3) - L2(s-b3))/(2b3), G4 = (K3(s+b4) - K3(s-b4))/(2b4), outer
+        # difference over b5 (b3, b4 from K.b, S3 = b1 + b2 + b3 computed)
+        c = (b2 - b1, b1 + b2, 1 / (12b2), b2 / 4 + b1^2 / (12b2), (b1^2 + b2^2) / 12, 1 / (96 * b1 * b2),
+             1 / (2b3), 1 / (2b4), b1 + b2 + b3 + b4, scale / (2b5))
     else
-        return GenericCubeKernel(b, scale)
+        return GeneratedCubeKernel(b, scale)
     end
     return CubeKernel{N,T}(b, scale, S, _pad10(c, T))
 end
@@ -103,15 +114,15 @@ end
 """
     GenericCubeKernel{N,T}
 
-As [`CubeKernel`](@ref) for `N ≥ 5` boxes (dimension ≥ 5, or 4 with a slab): evaluated by the
-recursion of `generic_density` with precomputed partial sums and moments.
+As [`CubeKernel`](@ref), evaluated by the recursion of `generic_density` with precomputed partial
+sums and moments, for any `N`; used with `generic = true` (see [`cube_kernel`](@ref)).
 """
-struct GenericCubeKernel{N,T<:AbstractFloat}
+struct GenericCubeKernel{N,T<:AbstractFloat}      # isbits (also usable on the GPU)
     b::NTuple{N,T}
     scale::T
     support::T
     S::NTuple{N,T}          # partial sums b_1 + … + b_k
-    μ::Matrix{T}            # μ[j+1, k] = E[(U_1 + … + U_k)^j]
+    μ::NTuple{N,NTuple{N,T}} # μ[k][j+1] = E[(U_1 + … + U_k)^j], j < N
 end
 function GenericCubeKernel(b::NTuple{N,T}, scale::T) where {N,T}
     S = Tuple(cumsum(collect(b)))
@@ -188,6 +199,45 @@ end
     return ifelse(u < K.support, v, zero(T))
 end
 
+# L2(s) = ∫_0^s K2, odd; for x = |s|, r = b1 + b2 - x, c0 as in K2, c1 = (b1² + b2²)/12:
+#   x ≤ b2 - b1:          x³ / (12 b2)
+#   b2 - b1 < x < b1 + b2: x²/4 - c0 x + c1 - r⁴ / (96 b1 b2)
+#   x ≥ b1 + b2:          x²/4 - c0 x + c1
+@inline function _L2(s::T, d21::T, s12::T, i12b2::T, c0::T, c1::T, i96::T) where {T}
+    x = abs(s)
+    r = s12 - x
+    q = x * (x / 4 - c0) + c1
+    r2 = r * r
+    g = ifelse(x <= d21, x * x * x * i12b2, ifelse(x < s12, q - r2 * r2 * i96, q))
+    return copysign(g, s)
+end
+
+# K3(s) = (L2(s + b3) - L2(s - b3)) / (2b3), even, an antiderivative of G3; = |s|/2 - c0 outside the
+# support (exact there; the closed form avoids the cancellation for |s| ≫ b3)
+@inline function _K3(s::T, d21, s12, i12b2, c0, c1, i96, b3, i2b3, S3) where {T}
+    x = abs(s)
+    v = (_L2(x + b3, d21, s12, i12b2, c0, c1, i96) - _L2(x - b3, d21, s12, i12b2, c0, c1, i96)) * i2b3
+    return ifelse(x < S3, v, x / 2 - c0)
+end
+
+# G4(s) = ∫_0^s (u_1 * … * u_4) = (K3(s + b4) - K3(s - b4)) / (2b4), = ±1/2 outside the support
+@inline function _G4(s::T, d21, s12, i12b2, c0, c1, i96, b3, i2b3, S3, b4, i2b4, S4) where {T}
+    v = (_K3(s + b4, d21, s12, i12b2, c0, c1, i96, b3, i2b3, S3) -
+         _K3(s - b4, d21, s12, i12b2, c0, c1, i96, b3, i2b3, S3)) * i2b4
+    return ifelse(abs(s) < S4, v, copysign(T(0.5), s))
+end
+
+# N = 5 (slab in 4D): (G4(t + b5) - G4(t - b5)) / (2b5)
+@inline function (K::CubeKernel{5,T})(t::T) where {T}
+    d21, s12, i12b2, c0, c1, i96, i2b3, i2b4, S4, outer = K.c
+    b3, b4, b5 = K.b[3], K.b[4], K.b[5]
+    S3 = s12 + b3
+    u = abs(t)
+    v = outer * (_G4(u + b5, d21, s12, i12b2, c0, c1, i96, b3, i2b3, S3, b4, i2b4, S4) -
+                 _G4(u - b5, d21, s12, i12b2, c0, c1, i96, b3, i2b3, S3, b4, i2b4, S4))
+    return ifelse(u < K.support, v, zero(T))
+end
+
 # --- any number of boxes ------------------------------------------------------------------------
 
 (K::GenericCubeKernel{N,T})(t::T) where {N,T} = K.scale * _J(K.b, K.S, K.μ, t)
@@ -208,15 +258,16 @@ the evaluation stable (unlike the alternating sum of Thm. 1). Cost `O(2^N)`.
 generic_density(b::NTuple{N,T}, t::T) where {N,T} =
     _J(b, Tuple(cumsum(collect(b))), _box_sum_moments(b), t)
 
-# moments μ[j+1, k] = E[(U_1 + … + U_k)^j], j = 0..N, of the sum of the first k uniforms
+# moments μ[k][j+1] = E[(U_1 + … + U_k)^j], j = 0..N-1 (the recursion needs j ≤ N-2), of the sum of
+# the first k uniforms
 function _box_sum_moments(b::NTuple{N,T}) where {N,T}
-    μ = zeros(T, N + 1, N)
-    prev = [j == 0 ? one(T) : zero(T) for j in 0:N]
+    μ = zeros(T, N, N)
+    prev = [j == 0 ? one(T) : zero(T) for j in 0:N-1]
     for k in 1:N
-        ν = [iseven(i) ? b[k]^i / (i + 1) : zero(T) for i in 0:N]
-        μ[:, k] = prev = [sum(binomial(j, i) * prev[j-i+1] * ν[i+1] for i in 0:j) for j in 0:N]
+        ν = [iseven(i) ? b[k]^i / (i + 1) : zero(T) for i in 0:N-1]
+        μ[:, k] = prev = [sum(binomial(j, i) * prev[j-i+1] * ν[i+1] for i in 0:j) for j in 0:N-1]
     end
-    return μ
+    return ntuple(k -> ntuple(j -> μ[j, k], Val(N)), Val(N))
 end
 
 # The recursion for k = N boxes and m = 0, written out as one expression tree (2^N leaves) when the
@@ -232,7 +283,7 @@ end
             tail = :(zero($T))
         else                # closed form outside the support: sign^m Σ_j C(m-1,j) |a|^(m-1-j) μ_j / (2(m-1)!)
             x = gensym(:x)
-            terms = [:($(T(binomial(m - 1, j) / (2 * factorial(m - 1)))) * $x^$(m - 1 - j) * μ[$(j + 1), $k]) for j in 0:2:m-1]
+            terms = [:($(T(binomial(m - 1, j) / (2 * factorial(m - 1)))) * $x^$(m - 1 - j) * μ[$k][$(j + 1)]) for j in 0:2:m-1]
             v = Expr(:call, :+, terms..., :(zero($T)))
             tail = isodd(m) ? :(let $x = abs($a); copysign($v, $a); end) : :(let $x = abs($a); $v; end)
         end
@@ -242,6 +293,125 @@ end
                  end)
     end
     return build(N, 0, :s)
+end
+
+# --- closed forms for any number of boxes -------------------------------------------------------
+
+"""
+    GeneratedCubeKernel{N,T}
+
+As [`CubeKernel`](@ref) for `N ≥ 6` boxes (dimension ≥ 6, or 5 with a slab): the closed forms of
+`CubeKernel{3..5}` continued to any `N`, generated per `N`. Base: the `m`-th antiderivative
+`B_m(s) = ∫_0^s B_{m-1}`, `m = N - 2`, of the trapezoid of the two smallest boxes (`G2`, `K2`, `L2`
+for `m = 1, 2, 3`), with parity `(-1)^m` and for `x = |s|`, `r = b1 + b2 - x`:
+
+    x ≤ b2 - b1:          x^m / (m! 2b2)
+    b2 - b1 < x < b1 + b2: P_m(x) + (-1)^m r^(m+1) / ((m+1)! 4b1b2)
+    x ≥ b1 + b2:          P_m(x)
+
+with the tail polynomial `P_m(x) = Σ_{i<m} C(m-1,i) (-1)^i E|U1 + U2|^i / 2 · x^(m-1-i) / (m-1)!`,
+
+and then one difference `(F(s + b_k) - F(s - b_k)) / (2b_k)` per box `k = 3..N`, each with its exact
+polynomial outside the support `|s| ≥ b1 + … + b_k` (the difference of the tail polynomial of the
+level below, expanded: no cancellation for `|s| ≫ b_k`). Branch free (`ifelse`), `2^(N-2)` base
+evaluations, isbits (GPU).
+"""
+struct GeneratedCubeKernel{N,T<:AbstractFloat}
+    b::NTuple{N,T}
+    scale::T
+    support::T
+    outer::T                    # scale / (2b_N)
+    S::NTuple{N,T}              # partial sums b_1 + … + b_k
+    i2b::NTuple{N,T}            # 1 / (2b_k)
+    base::NTuple{4,T}           # b2 - b1, b1 + b2, 1/(m! 2b2), (-1)^m/((m+1)! 4b1b2)
+    P::NTuple{N,T}              # tail polynomial of the base (ascending coefficients), degree m - 1
+    Q::NTuple{N,NTuple{N,T}}    # Q[k]: tail polynomial at level k = 3..N-1, degree N - k - 1
+end
+support(K::GeneratedCubeKernel) = K.support
+
+function GeneratedCubeKernel(b::NTuple{N,T}, scale::T) where {N,T}
+    N >= 2 || throw(ArgumentError("GeneratedCubeKernel: at least 2 boxes"))
+    W = promote_type(T, Float64)                     # constants computed in (at least) Float64
+    bw = map(W, b)
+    b1, b2 = bw[1], bw[2]
+    d, s12 = b2 - b1, b1 + b2
+    m = N - 2
+    fact(k) = W(factorial(k))
+    # absolute moments h_i = E|U1 + U2|^i (density 1/(2b2) on [0, d], linear on [d, s12]), as sums of
+    # positive terms: ∫_d^s12 y^i (s12 - y) dy with y = d + (2b1 - u)
+    h = [2 * (d^(i + 1) / ((i + 1) * 2b2) +
+              sum(binomial(i, j) * d^(i - j) * (2b1)^(j + 2) / ((j + 1) * (j + 2)) for j in 0:i) / (4b1 * b2))
+         for i in 0:max(m - 1, 0)]
+    # P_m(x) = Σ_{i<m} C(m-1,i) (-1)^i h_i/2 · x^(m-1-i) / (m-1)!   (∫_0^x of the density, iterated)
+    P = zeros(W, N)
+    for i in 0:m-1
+        P[m-i] = binomial(m - 1, i) * (-1)^i * h[i+1] / 2 / fact(m - 1)
+    end
+    # tails of the levels: Q_k(x) = (Q_{k-1}(x + b_k) - Q_{k-1}(x - b_k)) / (2b_k), Q_2 = P
+    Q = [zeros(W, N) for _ in 1:N]
+    q = P
+    for k in 3:N-1
+        qn = zeros(W, N)
+        for i in 0:N-1, j in 1:2:i
+            qn[i-j+1] += q[i+1] * binomial(i, j) * bw[k]^(j - 1)
+        end
+        Q[k] = q = qn
+    end
+    S = Tuple(cumsum(collect(bw)))
+    tup(v) = ntuple(i -> T(v[i]), Val(N))
+    return GeneratedCubeKernel{N,T}(b, scale, T(S[N]), T(N == 2 ? scale : scale / (2bw[N])),
+        tup(S), tup([1 / (2x) for x in bw]),
+        (T(d), T(s12), T(1 / (fact(m) * 2b2)), T((-1)^m / (fact(m + 1) * 4b1 * b2))),
+        tup(P), ntuple(k -> tup(Q[k]), Val(N)))
+end
+
+@generated function (K::GeneratedCubeKernel{N,T})(t::T) where {N,T}
+    m0 = N - 2
+    function horner(c, x, deg)          # c[1] + c[2] x + … + c[deg+1] x^deg
+        ex = :($c[$(deg + 1)])
+        for i in deg:-1:1
+            ex = :($c[$i] + $x * $ex)
+        end
+        return ex
+    end
+    # x^k as products (Base.:^ with an exponent > 3 calls the slow exact power function)
+    pw(x, k) = k == 0 ? :(one($T)) : k == 1 ? x : Expr(:call, :*, fill(x, k)...)
+    function base(arg)                  # B_{m0}
+        a, x, r, p = gensym(:a), gensym(:x), gensym(:r), gensym(:p)
+        pex = m0 == 0 ? :(zero($T)) : horner(:Pc, x, m0 - 1)
+        g = :(ifelse($x <= d21, $(pw(x, m0)) * cin, ifelse($x < s12, $p + $(pw(r, m0 + 1)) * cmid, $p)))
+        val = isodd(m0) ? :(copysign($g, $a)) : g
+        return :(let $a = $arg, $x = abs($a), $r = s12 - $x, $p = $pex
+                     $val
+                 end)
+    end
+    child(k, s) = k == 2 ? base(s) : level(k, s)
+    function level(k, arg)              # 3 ≤ k ≤ N-1, antiderivative of order m = N - k ≥ 1
+        m = N - k
+        a, x = gensym(:a), gensym(:x)
+        tail = horner(:(Q[$k]), x, m - 1)
+        if iseven(m)                    # even: evaluated at |s|
+            v = :(($(child(k - 1, :($x + b[$k]))) - $(child(k - 1, :($x - b[$k])))) * i2b[$k])
+            return :(let $x = abs($arg)
+                         ifelse($x < S[$k], $v, $tail)
+                     end)
+        else
+            v = :(($(child(k - 1, :($a + b[$k]))) - $(child(k - 1, :($a - b[$k])))) * i2b[$k])
+            return :(let $a = $arg, $x = abs($a)
+                         ifelse($x < S[$k], $v, copysign($tail, $a))
+                     end)
+        end
+    end
+    top = N == 2 ? :(K.outer * $(base(:u))) :
+          :(K.outer * ($(child(N - 1, :(u + b[$N]))) - $(child(N - 1, :(u - b[$N])))))
+    return quote
+        $(Expr(:meta, :inline))
+        b, S, i2b, Q, Pc = K.b, K.S, K.i2b, K.Q, K.P
+        d21, s12, cin, cmid = K.base
+        u = abs(t)
+        v = $top
+        ifelse(u < K.support, v, zero($T))
+    end
 end
 
 # ================================================================================================
@@ -405,7 +575,7 @@ end
 # window length W ∈ (4, 8, 16), number of blocks and margin for the kernel K and the radii: the radii
 # in [p - S, p + S] are among ⌈2S/Δ + 2τ⌉ + 1 consecutive ones from ⌊(p - S - r₁)/Δ - τ⌋ + 2
 function _window(K, ri::EquispacedRadii)
-    m = K isa CubeKernel{1} ? 1 : 0
+    m = length(K.b) == 1 ? 1 : 0      # box kernel (axis direction): value 1/2 at the jumps
     need = ceil(Int, 2support(K) * ri.invΔ + 2ri.τ) + 1 + 2m
     W = need <= 4 ? 4 : need <= 8 ? 8 : 16
     return W, cld(need, W), m
@@ -548,10 +718,10 @@ _plan(Rθ::RestrictedRadonTransform) =
 
 # Per call: the kernels of all directions, the index structure of the radii, one padding `off` for
 # all directions (the largest window) and the padded radii. Nothing of this is stored in the plan.
-function _setup(R::RadonTransform, ::Type{T}, h::NTuple{D,T}) where {T,D}
+function _setup(R::RadonTransform, ::Type{T}, h::NTuple{D,T}; generic::Bool = false) where {T,D}
     radii, angles, width, thr = _geometry(R, T, D)
     a = map(x -> x / 2, h)
-    kernels = [cube_kernel(a, _direction(angles, ℓ, Val(D)); width, threshold = thr) for ℓ in axes(angles, 1)]
+    kernels = [cube_kernel(a, _direction(angles, ℓ, Val(D)); width, threshold = thr, generic) for ℓ in axes(angles, 1)]
     ri = radii_index(radii)
     off, radp = _padding(ri, radii, kernels)
     return radii, angles, kernels, ri, off, radp
@@ -581,18 +751,20 @@ function _split(r::AbstractUnitRange, n::Int)
 end
 
 """
-    radon(P::Phantom, R::RadonTransform) -> Matrix (radii × angles)
-    radon(P::Phantom, Rθ::RestrictedRadonTransform) -> Vector (radii)
+    radon(P::Phantom, R::RadonTransform; generic=false) -> Matrix (radii × angles)
+    radon(P::Phantom, Rθ::RestrictedRadonTransform; generic=false) -> Vector (radii)
 
 The data of `R(P)` (`Rθ(P)`), computed with the fast implementation in the precision of `P`
-(`Float32` or `Float64`). The radii may be in any order.
+(`Float32` or `Float64`). The radii may be in any order. `generic = true`: the voxel kernels are
+always evaluated by the general recursion instead of the closed forms for ≤ 5 boxes (see
+[`cube_kernel`](@ref)).
 """
-radon(P::Phantom, R::RadonTransform) = _radon(P.data, _voxel_size(P), R)
-radon(P::Phantom, Rθ::RestrictedRadonTransform) = vec(radon(P, _plan(Rθ)))
+radon(P::Phantom, R::RadonTransform; generic::Bool = false) = _radon(P.data, _voxel_size(P), R; generic)
+radon(P::Phantom, Rθ::RestrictedRadonTransform; generic::Bool = false) = vec(radon(P, _plan(Rθ); generic))
 
-function _radon(f::AbstractArray{T,D}, h::NTuple{D,T}, R::RadonTransform) where {T,D}
+function _radon(f::AbstractArray{T,D}, h::NTuple{D,T}, R::RadonTransform; generic::Bool = false) where {T,D}
     n = size(f)
-    radii, angles, kernels, ri, off, radp = _setup(R, T, h)
+    radii, angles, kernels, ri, off, radp = _setup(R, T, h; generic)
     M, nr = size(angles, 1), length(radii)
     S = zeros(T, nr, M)
     nt = Threads.nthreads()
@@ -628,15 +800,17 @@ function _radon(f::AbstractArray{T,D}, h::NTuple{D,T}, R::RadonTransform) where 
 end
 
 """
-    backproject(R::RadonTransform, g, n, hypervoxel_size) -> Array of size n
-    backproject(R::RadonTransform, g, P::Phantom)
+    backproject(R::RadonTransform, g, n, hypervoxel_size; generic=false) -> Array of size n
+    backproject(R::RadonTransform, g, P::Phantom; generic=false)
 
 Adjoint of `f ↦ radon(Phantom(f, hypervoxel_size), R)` applied to the data `g` (radii × angles),
-computed in the precision of `g`: `out[j] = Σ_{θ,t} g[t,θ] A_θ(t - ⟨c_j,θ⟩)`.
+computed in the precision of `g`: `out[j] = Σ_{θ,t} g[t,θ] A_θ(t - ⟨c_j,θ⟩)`. `generic` as in
+[`radon`](@ref).
 """
-function backproject(R::RadonTransform, g::AbstractMatrix{T}, n::NTuple{D,Int}, hypervoxel_size) where {T<:AbstractFloat,D}
+function backproject(R::RadonTransform, g::AbstractMatrix{T}, n::NTuple{D,Int}, hypervoxel_size;
+                     generic::Bool = false) where {T<:AbstractFloat,D}
     h = ntuple(i -> T(hypervoxel_size[i]), D)
-    radii, angles, kernels, ri, off, radp = _setup(R, T, h)
+    radii, angles, kernels, ri, off, radp = _setup(R, T, h; generic)
     size(g) == (length(radii), size(angles, 1)) || throw(DimensionMismatch("data must be radii × angles"))
     gp = _padded_data(ri, _sort(R, g), off)
     out = zeros(T, n)
@@ -661,5 +835,6 @@ function _padded_data(::EquispacedRadii, g::AbstractMatrix{T}, off) where {T}
 end
 _padded_data(::SortedRadii, g, off) = g
 
-backproject(R::RadonTransform, g::AbstractMatrix, P::Phantom) = backproject(R, g, size(P.data), P.hypervoxel_size)
-backproject(R::RadonTransform, S::Sinogram, args...) = backproject(R, S.data, args...)
+backproject(R::RadonTransform, g::AbstractMatrix, P::Phantom; kwargs...) =
+    backproject(R, g, size(P.data), P.hypervoxel_size; kwargs...)
+backproject(R::RadonTransform, S::Sinogram, args...; kwargs...) = backproject(R, S.data, args...; kwargs...)
